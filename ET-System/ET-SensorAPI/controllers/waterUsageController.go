@@ -3,16 +3,22 @@ package controllers
 import (
 	"ET-SensorAPI/config"
 	"ET-SensorAPI/models"
+	"bytes"
+	"io"
 	"net/http"
 	"regexp"
 
 	"github.com/gin-gonic/gin"
 )
 
-var etUUIDRegex = regexp.MustCompile(`^ET-[a-f0-9\-]{36}$`)
+var etUUIDRegex = regexp.MustCompile(`^ET-[a-f0-9A-F\-]+$`)
 
 func CreateWaterUsage(c *gin.Context) {
 	var waterUsage models.WaterUsage
+
+	body, _ := io.ReadAll(c.Request.Body)
+
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
 
 	if err := c.ShouldBindJSON(&waterUsage); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

@@ -12,6 +12,7 @@ type User struct {
 	Username     string    `json:"username" gorm:"unique"`
 	Email        string    `json:"email" gorm:"unique"`
 	Password     string    `json:"-"`
+	DisplayName  string    `json:"displayname"`
 	RefreshToken string    `json:"refresh_token,omitempty"`
 	Verified     bool      `json:"verified" gorm:"default:false"`
 	VerifyToken  string    `json:"verify_token" gorm:"default:null"`
@@ -56,7 +57,7 @@ type WaterUsage struct {
 	Device     Device    `json:"-" gorm:"constraint:OnDelete:CASCADE;foreignKey:DeviceID;references:ID"`
 	FlowRate   float64   `json:"flow_rate"`
 	TotalUsage float64   `json:"total_usage"`
-	RecordedAt time.Time `json:"recorded_at"`
+	RecordedAt time.Time `json:"recorded_at" gorm:"type:timestamp"`
 }
 
 type ElectricityUsage struct {

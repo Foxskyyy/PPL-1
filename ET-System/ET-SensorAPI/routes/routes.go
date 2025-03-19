@@ -15,6 +15,7 @@ func SetupRouter(r *gin.Engine) {
 			userGroup.POST("/", controllers.CreateUser)
 			userGroup.GET("/", controllers.GetUsers)
 			userGroup.PUT("/:user_id/group", controllers.AssignUserToGroup)
+			userGroup.POST("/data", controllers.GetUserData)
 		}
 
 		// Authentication & Email Verification
@@ -30,6 +31,7 @@ func SetupRouter(r *gin.Engine) {
 		{
 			group.POST("/", controllers.CreateUserGroup)
 			group.GET("/", controllers.GetUserGroups)
+			group.POST("/members", controllers.AddUserToGroup)
 		}
 
 		// Devices

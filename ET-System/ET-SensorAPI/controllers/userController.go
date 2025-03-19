@@ -62,3 +62,26 @@ func AssignUserToGroup(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "User assigned to group successfully", "user_group_member": userGroupMember})
 }
+
+func GetUserData(c *gin.Context) {
+	var request struct {
+		Email string `json:"email" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: Email is required"})
+		return
+	}
+
+	var user models.User
+	if err := config.DB.Where("email = ?", request.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":          user.ID,
+		"email":       user.Email,
+		"displayname": user.DisplayName, // Assuming the User model has a Name field
+	})
+}
