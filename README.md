@@ -1,2 +1,2 @@
 # PPL-1
-Tugas Besar Proyek Perangkat Lunak 1
+EcoTrack adalah aplikasi cerdas yang berfungsi untuk membantu individu dan bisnis dalam memantau, menganalisis, dan mengoptimalkan konsumsi sumber daya seperti air, energi, dan material. Dengan fitur pemantauan real-time, pengguna dapat melacak penggunaan sumber daya mereka secara akurat, sementara teknologi AI menganalisis pola konsumsi dan memberikan rekomendasi untuk meningkatkan efisiensi serta mengurangi pemborosan.
