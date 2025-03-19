@@ -8,8 +8,8 @@
 #include <BlynkSimpleEsp32.h>
 
 char auth[] = BLYNK_AUTH_TOKEN;
-char ssid[] = "DHIN1";
-char pass[] = "16161725";
+char ssid[] = "SSID";
+char pass[] = "PASS";
 
 #define DEVICE_NAME "ET-d31e0e38-91bf-4b83-8439-1a7e72b1d8c4"
 #define SENSOR  25
