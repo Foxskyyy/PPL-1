@@ -9,7 +9,7 @@ import (
 func SetupRouter(r *gin.Engine) {
 	api := r.Group("/api/v1")
 	{
-		// User Management
+
 		userGroup := api.Group("/users")
 		{
 			userGroup.POST("/", controllers.CreateUser)
@@ -18,7 +18,6 @@ func SetupRouter(r *gin.Engine) {
 			userGroup.POST("/data", controllers.GetUserData)
 		}
 
-		// Authentication & Email Verification
 		authGroup := api.Group("/auth")
 		{
 			authGroup.POST("/register", controllers.Register)
@@ -26,33 +25,36 @@ func SetupRouter(r *gin.Engine) {
 			authGroup.POST("/login", controllers.Login)
 		}
 
-		// User Groups
 		group := api.Group("/user-groups")
 		{
 			group.POST("/", controllers.CreateUserGroup)
-			group.GET("/", controllers.GetUserGroups)
+			group.GET("/", controllers.GetDeviceGroups)
 			group.POST("/members", controllers.AddUserToGroup)
 		}
 
-		// Devices
 		deviceGroup := api.Group("/devices")
 		{
 			deviceGroup.POST("/", controllers.CreateDevice)
 			deviceGroup.GET("/", controllers.GetDevices)
+			deviceGroup.GET("/group/:group_id", controllers.GetDevicesByGroup)
 		}
 
-		// Water Usage
 		waterGroup := api.Group("/water-usage")
 		{
 			waterGroup.POST("/", controllers.CreateWaterUsage)
 			waterGroup.GET("/", controllers.GetWaterUsage)
+			waterGroup.GET("/device/:device_id", controllers.GetDeviceWaterUsage)
 		}
 
-		// Electricity Usage
 		electricityGroup := api.Group("/electricity-usage")
 		{
 			electricityGroup.POST("/", controllers.CreateElectricityUsage)
 			electricityGroup.GET("/", controllers.GetElectricityUsage)
+		}
+
+		logsGroup := api.Group("/device-logs")
+		{
+			logsGroup.GET("/group/:group_id", controllers.GetDeviceLogs)
 		}
 	}
 }

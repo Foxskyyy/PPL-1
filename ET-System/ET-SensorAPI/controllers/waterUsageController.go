@@ -55,3 +55,15 @@ func GetWaterUsage(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, waterUsages)
 }
+
+func GetDeviceWaterUsage(c *gin.Context) {
+	deviceID := c.Param("device_id")
+
+	var totalUsage float64
+	if err := config.DB.Table("water_usages").Where("device_id = ?", deviceID).Select("SUM(usage)").Scan(&totalUsage).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch usage"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"device_id": deviceID, "total_usage": totalUsage})
+}

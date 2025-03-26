@@ -57,7 +57,7 @@ func CreateUserGroup(c *gin.Context) {
 	})
 }
 
-func GetUserGroups(c *gin.Context) {
+func GetDeviceGroups(c *gin.Context) {
 	var groups []models.UserGroup
 	if err := config.DB.Preload("Devices").Find(&groups).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user groups"})
