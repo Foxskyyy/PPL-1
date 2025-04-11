@@ -10,10 +10,18 @@ func GetUserUsageData(userID uint) ([]models.WaterUsage, error) {
 	startTime := time.Now().AddDate(0, -3, 0)
 
 	var waterUsage []models.WaterUsage
-	err := config.DB.Where("device_id IN (?) AND recorded_at >= ?",
-		config.DB.Table("devices").Select("id").Where("user_id = ?", userID),
-		startTime,
-	).Find(&waterUsage).Error
+
+	subQuery := config.DB.
+		Table("devices").
+		Select("devices.id").
+		Joins("JOIN user_groups ON user_groups.id = devices.user_group_id").
+		Joins("JOIN user_group_members ON user_group_members.user_group_id = user_groups.id").
+		Where("user_group_members.user_id = ?", userID)
+
+	err := config.DB.
+		Where("device_id IN (?) AND recorded_at >= ?", subQuery, startTime).
+		Find(&waterUsage).Error
+
 	if err != nil {
 		return nil, err
 	}

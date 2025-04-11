@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,13 +18,14 @@ func CreateWaterUsage(c *gin.Context) {
 	var waterUsage models.WaterUsage
 
 	body, _ := io.ReadAll(c.Request.Body)
-
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
 
 	if err := c.ShouldBindJSON(&waterUsage); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	waterUsage.RecordedAt = time.Now()
 
 	if !etUUIDRegex.MatchString(waterUsage.DeviceID) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid Device ID format. Expected ET-UUID"})
