@@ -10,12 +10,12 @@ func SetupRouter(r *gin.Engine) {
 	api := r.Group("/api/v1")
 	{
 
-		userGroup := api.Group("/users")
+		userGroup := api.Group("/user-groups")
 		{
-			userGroup.POST("/", controllers.CreateUser)
-			userGroup.GET("/", controllers.GetUsers)
+			userGroup.POST("/", controllers.CreateUserGroup)
+			userGroup.GET("/", controllers.GetDeviceGroups)
 			userGroup.PUT("/:user_id/group", controllers.AssignUserToGroup)
-			userGroup.POST("/data", controllers.GetUserData)
+			userGroup.GET("/:uid/groups", controllers.GetUserGroupsByUserID)
 		}
 
 		authGroup := api.Group("/auth")
@@ -25,11 +25,12 @@ func SetupRouter(r *gin.Engine) {
 			authGroup.POST("/login", controllers.Login)
 		}
 
-		group := api.Group("/user-groups")
+		users := api.Group("/users")
 		{
-			group.POST("/", controllers.CreateUserGroup)
-			group.GET("/", controllers.GetDeviceGroups)
-			group.POST("/members", controllers.AddUserToGroup)
+			users.POST("/", controllers.CreateUser)
+			users.GET("/", controllers.GetUsers)
+			users.POST("/data", controllers.GetUserData)
+			users.POST("/members", controllers.AddUserToGroup)
 		}
 
 		deviceGroup := api.Group("/devices")

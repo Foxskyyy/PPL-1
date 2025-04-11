@@ -102,3 +102,30 @@ func GetUserGroupMembers(c *gin.Context) {
 
 	c.JSON(http.StatusOK, members)
 }
+
+func GetUserGroupsByUserID(c *gin.Context) {
+	uid := c.Param("uid")
+	if uid == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "user ID is required"})
+		return
+	}
+
+	var groups []models.UserGroup
+
+	err := config.DB.
+		Table("user_group_members").
+		Select("user_groups.id, user_groups.name, user_groups.created_at").
+		Joins("join user_groups on user_group_members.user_group_id = user_groups.id").
+		Where("user_group_members.user_id = ?", uid).
+		Scan(&groups).Error
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user groups"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user_id": uid,
+		"groups":  groups,
+	})
+}

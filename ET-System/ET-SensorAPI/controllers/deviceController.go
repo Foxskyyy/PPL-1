@@ -5,6 +5,7 @@ import (
 	"ET-SensorAPI/models"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -82,25 +83,23 @@ func GetDevicesByGroup(c *gin.Context) {
 	c.JSON(http.StatusOK, devices)
 }
 
-type DeviceLog struct {
-	ID         uint   `json:"id"`
-	DeviceID   string `json:"device_id"`
-	DeviceName string `json:"device_name"`
-	Message    string `json:"message"`
-	Timestamp  string `json:"timestamp"`
+type WaterUsageLog struct {
+	DeviceName string    `json:"device_name"`
+	FlowRate   float64   `json:"flow_rate"`
+	RecordedAt time.Time `json:"recorded_at"`
 }
 
 func GetDeviceLogs(c *gin.Context) {
 	groupID := c.Param("group_id")
 
-	var logs []DeviceLog
-	if err := config.DB.Table("device_logs").
-		Joins("JOIN devices ON devices.id = device_logs.device_id").
+	var logs []WaterUsageLog
+	if err := config.DB.Table("water_usages").
+		Joins("JOIN devices ON devices.id = water_usages.device_id").
 		Where("devices.user_group_id = ?", groupID).
-		Order("device_logs.timestamp DESC").
-		Select("device_logs.id, device_logs.device_id, devices.name AS device_name, device_logs.message, device_logs.timestamp").
+		Order("water_usages.recorded_at DESC").
+		Select("devices.name AS device_name, water_usages.flow_rate, water_usages.recorded_at").
 		Scan(&logs).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch logs"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch usage logs"})
 		return
 	}
 

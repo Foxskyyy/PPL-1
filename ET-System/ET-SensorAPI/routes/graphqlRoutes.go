@@ -1,29 +1,47 @@
 package routes
 
 import (
-	"ET-SensorAPI/graphql"
-	"net/http"
+	"ET-SensorAPI/config"
+	"ET-SensorAPI/graph"
 
+	"github.com/vektah/gqlparser/v2/ast"
+
+	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/handler/extension"
+	"github.com/99designs/gqlgen/graphql/handler/lru"
+	"github.com/99designs/gqlgen/graphql/handler/transport"
+	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
-	gql "github.com/graphql-go/graphql"
 )
 
-func GraphQLHandler(c *gin.Context) {
-	var query struct {
-		Query string `json:"query"`
-	}
-	if err := c.ShouldBindJSON(&query); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
+func graphqlHandler() gin.HandlerFunc {
+	h := handler.New(graph.NewExecutableSchema(graph.Config{Resolvers: &graph.Resolver{DB: config.DB}}))
 
-	result := gql.Do(gql.Params{
-		Schema:        graphql.Schema,
-		RequestString: query.Query,
+	h.AddTransport(transport.Options{})
+	h.AddTransport(transport.GET{})
+	h.AddTransport(transport.POST{})
+
+	h.SetQueryCache(lru.New[*ast.QueryDocument](1000))
+
+	h.Use(extension.Introspection{})
+	h.Use(extension.AutomaticPersistedQuery{
+		Cache: lru.New[string](100),
 	})
-	c.JSON(http.StatusOK, result)
+
+	return func(c *gin.Context) {
+		h.ServeHTTP(c.Writer, c.Request)
+	}
+}
+
+func playgroundHandler() gin.HandlerFunc {
+	h := playground.Handler("GraphQL", "/graphql/query")
+
+	return func(c *gin.Context) {
+		h.ServeHTTP(c.Writer, c.Request)
+	}
 }
 
 func SetupGraphQLRoutes(r *gin.Engine) {
-	r.GET("/graphql", GraphQLHandler)
+	r.POST("/graphql/query", graphqlHandler())
+	r.GET("/graphql", playgroundHandler())
 }

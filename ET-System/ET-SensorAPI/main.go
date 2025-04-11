@@ -36,7 +36,11 @@ func main() {
 		fmt.Println("✅ Migration completed successfully!")
 	}
 
+	dir, _ := os.Getwd()
+	fmt.Println("Running from:", dir)
+
 	r := gin.Default()
+	r.Static("/static", "./static")
 	routes.SetupRouter(r)
 	routes.SetupGraphQLRoutes(r)
 	routes.SetupDeepSeekRoutes(r)
@@ -46,8 +50,8 @@ func main() {
 		port = "8080"
 	}
 
-	fmt.Println("Server running on port 8080")
-	// r.Run(":" + port)
+	fmt.Printf("Server running on http://localhost:%s/\n", port)
+	r.Run(":" + port)
 	http.ListenAndServe(":"+port,
 		handlers.CORS(
 			handlers.AllowedOrigins([]string{"*"}),

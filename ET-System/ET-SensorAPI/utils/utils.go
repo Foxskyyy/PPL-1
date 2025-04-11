@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func GetUserUsageData(userID uint) ([]models.WaterUsage, []models.ElectricityUsage, error) {
+func GetUserUsageData(userID uint) ([]models.WaterUsage, error) {
 	startTime := time.Now().AddDate(0, -3, 0)
 
 	var waterUsage []models.WaterUsage
@@ -15,14 +15,16 @@ func GetUserUsageData(userID uint) ([]models.WaterUsage, []models.ElectricityUsa
 		startTime,
 	).Find(&waterUsage).Error
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	var electricityUsage []models.ElectricityUsage
-	err = config.DB.Where("user_id = ? AND recorded_at >= ?", userID, startTime).Find(&electricityUsage).Error
-	if err != nil {
-		return nil, nil, err
-	}
+	return waterUsage, nil
+}
 
-	return waterUsage, electricityUsage, nil
+func GetUserByEmail(email string) (*models.User, error) {
+	var user models.User
+	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return &user, nil
 }

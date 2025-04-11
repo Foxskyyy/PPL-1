@@ -1,0 +1,61 @@
+scalar Time
+
+type User {
+  id: ID!
+  username: String!
+  email: String!
+  displayName: String
+  verified: Boolean!
+  createdAt: Time!
+  groups: [UserGroup!]!
+}
+
+type UserGroup {
+  id: ID!
+  name: String!
+  createdAt: Time!
+  devices: [Device!]!
+  users: [User!]!
+}
+
+type Device {
+  id: ID!
+  userGroup: UserGroup!
+  name: String!
+  location: String!
+  createdAt: Time!
+  waterUsages: [WaterUsage!]!
+}
+
+type WaterUsage {
+  id: ID!
+  device: Device!
+  flowRate: Float!
+  totalUsage: Float!
+  recordedAt: Time!
+}
+
+type DeepSeekResponse {
+  analysis: String
+}
+
+type AuthPayload {
+  user: User!
+  token: String!
+}
+
+type Query {
+  users: [User!]!
+  userGroups: [UserGroup!]!
+  devices: [Device!]!
+  waterUsages: [WaterUsage!]!
+  deepSeekAnalysis(userID: Int!): DeepSeekResponse
+}
+
+type Mutation {
+  login(email: String!, password: String!): AuthPayload!
+  register(username: String!, email: String!, password: String!): String
+  assignUserToGroup(userID: Int!, userGroupID: Int!): String
+  verifyEmail(email: String!, token: String!): String
+  ResendVerificationEmail(email: String!): String
+}

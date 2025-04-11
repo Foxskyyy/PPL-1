@@ -27,7 +27,7 @@ func Register(c *gin.Context) {
 	var existingUser models.User
 	if err := config.DB.Where("email = ?", input.Email).First(&existingUser).Error; err != nil {
 		if err != gorm.ErrRecordNotFound {
-			fmt.Println("❌ Database Lookup Error:", err) // Debugging log
+			fmt.Println("❌ Database Lookup Error:", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 			return
 		}

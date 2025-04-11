@@ -103,17 +103,75 @@ func GenerateOTP() (string, error) {
 }
 
 func SendVerificationEmail(email, token string) error {
+	var user models.User
+	result := config.DB.Where("email = ?", email).First(&user)
+	if result.Error != nil {
+		return result.Error
+	}
+
 	from := os.Getenv("SMTP_EMAIL")
 	password := os.Getenv("SMTP_PASSWORD")
 	to := []string{email}
 	smtpHost := "smtp.gmail.com"
 	smtpPort := "587"
 
-	message := []byte(fmt.Sprintf("Subject: ECOTRACK | Email Verification\n\nHere is your Email Verification Code : %s", token))
+	subjectLogin := "Subject: ECOTRACK | Login Approval Code\r\n"
+	subjectSignup := "Subject: ECOTRACK | Email Verification\r\n"
+	mime := "MIME-version: 1.0;\r\nContent-Type: text/html; charset=\"UTF-8\";\r\n\r\n"
+
+	bodyLogin := fmt.Sprintf(`
+		<html>
+			<body style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px;">
+				<div style="max-width: 500px; margin: auto; background: #eee; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+					<div style="text-align: center;">
+						<img src="https://api.interphaselabs.com/static/logo.png" width="200" style="margin-bottom: 20px;" />
+						<h2 style="color: #333;">Login Code</h2>
+						<p style="font-size: 16px; color: #666;">Here is your login approval code:</p>
+						<div style="font-size: 24px; font-weight: bold; color: #000; background: #ffffff; padding: 20px 30px; border-radius: 8px; display: inline-block; margin: 20px 0; line-height: 32px;">
+							%s
+						</div>
+						<p style="font-size: 14px; color: #999;">
+							If this request did not come from you, change your account password immediately to prevent further unauthorized access.
+						</p>
+					</div>
+				</div>
+			</body>
+		</html>
+	`, token)
+
+	bodySignup := fmt.Sprintf(`
+		<html>
+			<body style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px;">
+				<div style="max-width: 500px; margin: auto; background: #eee; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+					<div style="text-align: center;">
+						<img src="https://api.interphaselabs.com/static/logo.png" width="200" style="margin-bottom: 20px;" />
+						<h2 style="color: #333;">Email Verification Code</h2>
+						<p style="font-size: 16px; color: #666;">Here is your email verification code:</p>
+						<div style="font-size: 24px; font-weight: bold; color: #000; background: #ffffff; padding: 20px 100px; border-radius: 8px; display: inline-block; margin: 20px 0; line-height: 32px;">
+							%s
+						</div>
+						<p style="font-size: 14px; color: #999;">
+							If this request did not come from you, change your account password immediately to prevent further unauthorized access.
+						</p>
+					</div>
+				</div>
+			</body>
+		</html>
+	`, token)
+
+	var message []byte
+	if user.Verified {
+		message = []byte(subjectLogin + mime + bodyLogin)
+	} else {
+		message = []byte(subjectSignup + mime + bodySignup)
+	}
 
 	auth := smtp.PlainAuth("", from, password, smtpHost)
+	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, from, to, message)
+	if err != nil {
+		return err
+	}
 
-	fmt.Print("Verification Email Sent!")
-
-	return smtp.SendMail(smtpHost+":"+smtpPort, auth, from, to, message)
+	fmt.Println("Verification Email Sent!")
+	return nil
 }
