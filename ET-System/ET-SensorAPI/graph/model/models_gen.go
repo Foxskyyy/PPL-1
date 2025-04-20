@@ -3,6 +3,10 @@
 package model
 
 import (
+	"bytes"
+	"fmt"
+	"io"
+	"strconv"
 	"time"
 )
 
@@ -54,4 +58,59 @@ type WaterUsage struct {
 	FlowRate   float64   `json:"flowRate"`
 	TotalUsage float64   `json:"totalUsage"`
 	RecordedAt time.Time `json:"recordedAt"`
+}
+
+type OAuthProvider string
+
+const (
+	OAuthProviderGoogle OAuthProvider = "GOOGLE"
+	OAuthProviderApple  OAuthProvider = "APPLE"
+)
+
+var AllOAuthProvider = []OAuthProvider{
+	OAuthProviderGoogle,
+	OAuthProviderApple,
+}
+
+func (e OAuthProvider) IsValid() bool {
+	switch e {
+	case OAuthProviderGoogle, OAuthProviderApple:
+		return true
+	}
+	return false
+}
+
+func (e OAuthProvider) String() string {
+	return string(e)
+}
+
+func (e *OAuthProvider) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = OAuthProvider(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid OAuthProvider", str)
+	}
+	return nil
+}
+
+func (e OAuthProvider) MarshalGQL(w io.Writer) {
+	fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *OAuthProvider) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e OAuthProvider) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }

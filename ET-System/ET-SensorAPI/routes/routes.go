@@ -47,12 +47,6 @@ func SetupRouter(r *gin.Engine) {
 			waterGroup.GET("/device/:device_id", controllers.GetDeviceWaterUsage)
 		}
 
-		electricityGroup := api.Group("/electricity-usage")
-		{
-			electricityGroup.POST("/", controllers.CreateElectricityUsage)
-			electricityGroup.GET("/", controllers.GetElectricityUsage)
-		}
-
 		logsGroup := api.Group("/device-logs")
 		{
 			logsGroup.GET("/group/:group_id", controllers.GetDeviceLogs)

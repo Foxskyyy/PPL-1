@@ -105,6 +105,8 @@ func Login(c *gin.Context) {
 	user.RefreshToken = refreshToken
 	config.DB.Save(&user)
 
+	fmt.Println(user.Username + "logged in")
+
 	c.JSON(http.StatusOK, gin.H{"access_token": accessToken, "refresh_token": refreshToken})
 }
 

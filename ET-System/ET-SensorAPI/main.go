@@ -6,11 +6,10 @@ import (
 	"ET-SensorAPI/routes"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/gorilla/handlers"
 	"github.com/joho/godotenv"
 )
 
@@ -28,7 +27,6 @@ func main() {
 		&models.UserGroupMember{},
 		&models.Device{},
 		&models.WaterUsage{},
-		&models.ElectricityUsage{},
 	)
 	if err != nil {
 		fmt.Println("❌ Migration failed:", err)
@@ -40,6 +38,15 @@ func main() {
 	fmt.Println("Running from:", dir)
 
 	r := gin.Default()
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:  []string{"*"},
+		AllowMethods:  []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:  []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders: []string{"Content-Length"},
+		// AllowCredentials: true,
+		// MaxAge:           12 * time.Hour,
+	}))
+
 	r.Static("/static", "./static")
 	routes.SetupRouter(r)
 	routes.SetupGraphQLRoutes(r)
@@ -51,11 +58,7 @@ func main() {
 	}
 
 	fmt.Printf("Server running on http://localhost:%s/\n", port)
-	r.Run(":" + port)
-	http.ListenAndServe(":"+port,
-		handlers.CORS(
-			handlers.AllowedOrigins([]string{"*"}),
-			handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
-			handlers.AllowedHeaders([]string{"Origin", "Content-Type", "Authorization"}),
-		)(r))
+	if err := r.Run(":" + port); err != nil {
+		log.Fatal(err)
+	}
 }

@@ -16,6 +16,8 @@ type User struct {
 	RefreshToken string    `json:"refresh_token,omitempty"`
 	Verified     bool      `json:"verified" gorm:"default:false"`
 	VerifyToken  string    `json:"verify_token" gorm:"default:null"`
+	Provider     string    `json:"provider"`
+	ProviderID   string    `json:"provider_id" gorm:"unique"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 
@@ -58,12 +60,4 @@ type WaterUsage struct {
 	FlowRate   float64   `json:"flow_rate"`
 	TotalUsage float64   `json:"total_usage"`
 	RecordedAt time.Time `json:"recorded_at" gorm:"type:timestamp"`
-}
-
-type ElectricityUsage struct {
-	ID         uint      `json:"id" gorm:"primaryKey"`
-	UserID     uint      `json:"user_id"`
-	User       User      `json:"-" gorm:"constraint:OnDelete:CASCADE;"`
-	TotalUsage float64   `json:"total_usage"`
-	RecordedAt time.Time `json:"recorded_at"`
 }

@@ -67,9 +67,15 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		AssignUserToGroup       func(childComplexity int, userID int32, userGroupID int32) int
+		AddDeviceToUserGroup    func(childComplexity int, deviceID string, deviceName string, userGroupID int32, location string) int
+		AssignUserToGroup       func(childComplexity int, email string, userGroupID int32) int
+		ChangeEmail             func(childComplexity int, email string, password string, newemail string) int
+		CreateUserGroup         func(childComplexity int, userID int32, groupName string) int
+		ForgotPasswordHandler   func(childComplexity int, email string, password string) int
 		Login                   func(childComplexity int, email string, password string) int
-		Register                func(childComplexity int, username string, email string, password string) int
+		OauthLogin              func(childComplexity int, provider model.OAuthProvider, token string) int
+		Register                func(childComplexity int, displayName string, username string, email string, password string) int
+		RequestForgotPassword   func(childComplexity int, email string) int
 		ResendVerificationEmail func(childComplexity int, email string) int
 		VerifyEmail             func(childComplexity int, email string, token string) int
 	}
@@ -111,10 +117,16 @@ type ComplexityRoot struct {
 
 type MutationResolver interface {
 	Login(ctx context.Context, email string, password string) (*model.AuthPayload, error)
-	Register(ctx context.Context, username string, email string, password string) (*string, error)
-	AssignUserToGroup(ctx context.Context, userID int32, userGroupID int32) (*string, error)
+	Register(ctx context.Context, displayName string, username string, email string, password string) (*string, error)
+	AssignUserToGroup(ctx context.Context, email string, userGroupID int32) (*string, error)
 	VerifyEmail(ctx context.Context, email string, token string) (*string, error)
 	ResendVerificationEmail(ctx context.Context, email string) (*string, error)
+	RequestForgotPassword(ctx context.Context, email string) (*string, error)
+	ForgotPasswordHandler(ctx context.Context, email string, password string) (*string, error)
+	ChangeEmail(ctx context.Context, email string, password string, newemail string) (*string, error)
+	CreateUserGroup(ctx context.Context, userID int32, groupName string) (*model.UserGroup, error)
+	AddDeviceToUserGroup(ctx context.Context, deviceID string, deviceName string, userGroupID int32, location string) (*model.UserGroup, error)
+	OauthLogin(ctx context.Context, provider model.OAuthProvider, token string) (*model.AuthPayload, error)
 }
 type QueryResolver interface {
 	Users(ctx context.Context) ([]*model.User, error)
@@ -138,7 +150,7 @@ func (e *executableSchema) Schema() *ast.Schema {
 	return parsedSchema
 }
 
-func (e *executableSchema) Complexity(typeName, field string, childComplexity int, rawArgs map[string]any) (int, bool) {
+func (e *executableSchema) Complexity(ctx context.Context, typeName, field string, childComplexity int, rawArgs map[string]any) (int, bool) {
 	ec := executionContext{nil, e, 0, 0, nil}
 	_ = ec
 	switch typeName + "." + field {
@@ -206,48 +218,120 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Device.WaterUsages(childComplexity), true
 
+	case "Mutation.addDeviceToUserGroup":
+		if e.complexity.Mutation.AddDeviceToUserGroup == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addDeviceToUserGroup_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.AddDeviceToUserGroup(childComplexity, args["deviceId"].(string), args["deviceName"].(string), args["userGroupID"].(int32), args["location"].(string)), true
+
 	case "Mutation.assignUserToGroup":
 		if e.complexity.Mutation.AssignUserToGroup == nil {
 			break
 		}
 
-		args, err := ec.field_Mutation_assignUserToGroup_args(context.TODO(), rawArgs)
+		args, err := ec.field_Mutation_assignUserToGroup_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Mutation.AssignUserToGroup(childComplexity, args["userID"].(int32), args["userGroupID"].(int32)), true
+		return e.complexity.Mutation.AssignUserToGroup(childComplexity, args["email"].(string), args["userGroupID"].(int32)), true
+
+	case "Mutation.changeEmail":
+		if e.complexity.Mutation.ChangeEmail == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_changeEmail_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.ChangeEmail(childComplexity, args["email"].(string), args["password"].(string), args["newemail"].(string)), true
+
+	case "Mutation.createUserGroup":
+		if e.complexity.Mutation.CreateUserGroup == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createUserGroup_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.CreateUserGroup(childComplexity, args["userID"].(int32), args["groupName"].(string)), true
+
+	case "Mutation.ForgotPasswordHandler":
+		if e.complexity.Mutation.ForgotPasswordHandler == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_ForgotPasswordHandler_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.ForgotPasswordHandler(childComplexity, args["email"].(string), args["password"].(string)), true
 
 	case "Mutation.login":
 		if e.complexity.Mutation.Login == nil {
 			break
 		}
 
-		args, err := ec.field_Mutation_login_args(context.TODO(), rawArgs)
+		args, err := ec.field_Mutation_login_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
 		return e.complexity.Mutation.Login(childComplexity, args["email"].(string), args["password"].(string)), true
 
+	case "Mutation.oauthLogin":
+		if e.complexity.Mutation.OauthLogin == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_oauthLogin_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.OauthLogin(childComplexity, args["provider"].(model.OAuthProvider), args["token"].(string)), true
+
 	case "Mutation.register":
 		if e.complexity.Mutation.Register == nil {
 			break
 		}
 
-		args, err := ec.field_Mutation_register_args(context.TODO(), rawArgs)
+		args, err := ec.field_Mutation_register_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
 
-		return e.complexity.Mutation.Register(childComplexity, args["username"].(string), args["email"].(string), args["password"].(string)), true
+		return e.complexity.Mutation.Register(childComplexity, args["displayName"].(string), args["username"].(string), args["email"].(string), args["password"].(string)), true
+
+	case "Mutation.RequestForgotPassword":
+		if e.complexity.Mutation.RequestForgotPassword == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_RequestForgotPassword_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.RequestForgotPassword(childComplexity, args["email"].(string)), true
 
 	case "Mutation.ResendVerificationEmail":
 		if e.complexity.Mutation.ResendVerificationEmail == nil {
 			break
 		}
 
-		args, err := ec.field_Mutation_ResendVerificationEmail_args(context.TODO(), rawArgs)
+		args, err := ec.field_Mutation_ResendVerificationEmail_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -259,7 +343,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_Mutation_verifyEmail_args(context.TODO(), rawArgs)
+		args, err := ec.field_Mutation_verifyEmail_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -271,7 +355,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			break
 		}
 
-		args, err := ec.field_Query_deepSeekAnalysis_args(context.TODO(), rawArgs)
+		args, err := ec.field_Query_deepSeekAnalysis_args(ctx, rawArgs)
 		if err != nil {
 			return 0, false
 		}
@@ -548,6 +632,70 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
 // region    ***************************** args.gotpl *****************************
 
+func (ec *executionContext) field_Mutation_ForgotPasswordHandler_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_ForgotPasswordHandler_argsEmail(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["email"] = arg0
+	arg1, err := ec.field_Mutation_ForgotPasswordHandler_argsPassword(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["password"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_ForgotPasswordHandler_argsEmail(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
+	if tmp, ok := rawArgs["email"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_ForgotPasswordHandler_argsPassword(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("password"))
+	if tmp, ok := rawArgs["password"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_RequestForgotPassword_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_RequestForgotPassword_argsEmail(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["email"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_RequestForgotPassword_argsEmail(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
+	if tmp, ok := rawArgs["email"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_ResendVerificationEmail_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -571,14 +719,91 @@ func (ec *executionContext) field_Mutation_ResendVerificationEmail_argsEmail(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_Mutation_assignUserToGroup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Mutation_addDeviceToUserGroup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := ec.field_Mutation_assignUserToGroup_argsUserID(ctx, rawArgs)
+	arg0, err := ec.field_Mutation_addDeviceToUserGroup_argsDeviceID(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["userID"] = arg0
+	args["deviceId"] = arg0
+	arg1, err := ec.field_Mutation_addDeviceToUserGroup_argsDeviceName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["deviceName"] = arg1
+	arg2, err := ec.field_Mutation_addDeviceToUserGroup_argsUserGroupID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["userGroupID"] = arg2
+	arg3, err := ec.field_Mutation_addDeviceToUserGroup_argsLocation(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["location"] = arg3
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_addDeviceToUserGroup_argsDeviceID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("deviceId"))
+	if tmp, ok := rawArgs["deviceId"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_addDeviceToUserGroup_argsDeviceName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("deviceName"))
+	if tmp, ok := rawArgs["deviceName"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_addDeviceToUserGroup_argsUserGroupID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int32, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("userGroupID"))
+	if tmp, ok := rawArgs["userGroupID"]; ok {
+		return ec.unmarshalNInt2int32(ctx, tmp)
+	}
+
+	var zeroVal int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_addDeviceToUserGroup_argsLocation(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("location"))
+	if tmp, ok := rawArgs["location"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_assignUserToGroup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_assignUserToGroup_argsEmail(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["email"] = arg0
 	arg1, err := ec.field_Mutation_assignUserToGroup_argsUserGroupID(ctx, rawArgs)
 	if err != nil {
 		return nil, err
@@ -586,16 +811,16 @@ func (ec *executionContext) field_Mutation_assignUserToGroup_args(ctx context.Co
 	args["userGroupID"] = arg1
 	return args, nil
 }
-func (ec *executionContext) field_Mutation_assignUserToGroup_argsUserID(
+func (ec *executionContext) field_Mutation_assignUserToGroup_argsEmail(
 	ctx context.Context,
 	rawArgs map[string]any,
-) (int32, error) {
-	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("userID"))
-	if tmp, ok := rawArgs["userID"]; ok {
-		return ec.unmarshalNInt2int32(ctx, tmp)
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
+	if tmp, ok := rawArgs["email"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
 	}
 
-	var zeroVal int32
+	var zeroVal string
 	return zeroVal, nil
 }
 
@@ -609,6 +834,106 @@ func (ec *executionContext) field_Mutation_assignUserToGroup_argsUserGroupID(
 	}
 
 	var zeroVal int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_changeEmail_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_changeEmail_argsEmail(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["email"] = arg0
+	arg1, err := ec.field_Mutation_changeEmail_argsPassword(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["password"] = arg1
+	arg2, err := ec.field_Mutation_changeEmail_argsNewemail(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["newemail"] = arg2
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_changeEmail_argsEmail(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
+	if tmp, ok := rawArgs["email"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_changeEmail_argsPassword(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("password"))
+	if tmp, ok := rawArgs["password"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_changeEmail_argsNewemail(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("newemail"))
+	if tmp, ok := rawArgs["newemail"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_createUserGroup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_createUserGroup_argsUserID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["userID"] = arg0
+	arg1, err := ec.field_Mutation_createUserGroup_argsGroupName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["groupName"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_createUserGroup_argsUserID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int32, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("userID"))
+	if tmp, ok := rawArgs["userID"]; ok {
+		return ec.unmarshalNInt2int32(ctx, tmp)
+	}
+
+	var zeroVal int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_createUserGroup_argsGroupName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("groupName"))
+	if tmp, ok := rawArgs["groupName"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
 	return zeroVal, nil
 }
 
@@ -653,26 +978,85 @@ func (ec *executionContext) field_Mutation_login_argsPassword(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_oauthLogin_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_oauthLogin_argsProvider(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["provider"] = arg0
+	arg1, err := ec.field_Mutation_oauthLogin_argsToken(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["token"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_oauthLogin_argsProvider(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (model.OAuthProvider, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("provider"))
+	if tmp, ok := rawArgs["provider"]; ok {
+		return ec.unmarshalNOAuthProvider2ETᚑSensorAPIᚋgraphᚋmodelᚐOAuthProvider(ctx, tmp)
+	}
+
+	var zeroVal model.OAuthProvider
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_oauthLogin_argsToken(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("token"))
+	if tmp, ok := rawArgs["token"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_register_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := ec.field_Mutation_register_argsUsername(ctx, rawArgs)
+	arg0, err := ec.field_Mutation_register_argsDisplayName(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["username"] = arg0
-	arg1, err := ec.field_Mutation_register_argsEmail(ctx, rawArgs)
+	args["displayName"] = arg0
+	arg1, err := ec.field_Mutation_register_argsUsername(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["email"] = arg1
-	arg2, err := ec.field_Mutation_register_argsPassword(ctx, rawArgs)
+	args["username"] = arg1
+	arg2, err := ec.field_Mutation_register_argsEmail(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["password"] = arg2
+	args["email"] = arg2
+	arg3, err := ec.field_Mutation_register_argsPassword(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["password"] = arg3
 	return args, nil
 }
+func (ec *executionContext) field_Mutation_register_argsDisplayName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("displayName"))
+	if tmp, ok := rawArgs["displayName"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_register_argsUsername(
 	ctx context.Context,
 	rawArgs map[string]any,
@@ -1407,7 +1791,7 @@ func (ec *executionContext) _Mutation_register(ctx context.Context, field graphq
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().Register(rctx, fc.Args["username"].(string), fc.Args["email"].(string), fc.Args["password"].(string))
+		return ec.resolvers.Mutation().Register(rctx, fc.Args["displayName"].(string), fc.Args["username"].(string), fc.Args["email"].(string), fc.Args["password"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1459,7 +1843,7 @@ func (ec *executionContext) _Mutation_assignUserToGroup(ctx context.Context, fie
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().AssignUserToGroup(rctx, fc.Args["userID"].(int32), fc.Args["userGroupID"].(int32))
+		return ec.resolvers.Mutation().AssignUserToGroup(rctx, fc.Args["email"].(string), fc.Args["userGroupID"].(int32))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1595,6 +1979,357 @@ func (ec *executionContext) fieldContext_Mutation_ResendVerificationEmail(ctx co
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_ResendVerificationEmail_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_RequestForgotPassword(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_RequestForgotPassword(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().RequestForgotPassword(rctx, fc.Args["email"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_RequestForgotPassword(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_RequestForgotPassword_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_ForgotPasswordHandler(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_ForgotPasswordHandler(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().ForgotPasswordHandler(rctx, fc.Args["email"].(string), fc.Args["password"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_ForgotPasswordHandler(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_ForgotPasswordHandler_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_changeEmail(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_changeEmail(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().ChangeEmail(rctx, fc.Args["email"].(string), fc.Args["password"].(string), fc.Args["newemail"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_changeEmail(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_changeEmail_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createUserGroup(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_createUserGroup(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().CreateUserGroup(rctx, fc.Args["userID"].(int32), fc.Args["groupName"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.UserGroup)
+	fc.Result = res
+	return ec.marshalNUserGroup2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐUserGroup(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_createUserGroup(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserGroup_id(ctx, field)
+			case "name":
+				return ec.fieldContext_UserGroup_name(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserGroup_createdAt(ctx, field)
+			case "devices":
+				return ec.fieldContext_UserGroup_devices(ctx, field)
+			case "users":
+				return ec.fieldContext_UserGroup_users(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserGroup", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createUserGroup_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addDeviceToUserGroup(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_addDeviceToUserGroup(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().AddDeviceToUserGroup(rctx, fc.Args["deviceId"].(string), fc.Args["deviceName"].(string), fc.Args["userGroupID"].(int32), fc.Args["location"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.UserGroup)
+	fc.Result = res
+	return ec.marshalNUserGroup2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐUserGroup(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_addDeviceToUserGroup(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserGroup_id(ctx, field)
+			case "name":
+				return ec.fieldContext_UserGroup_name(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserGroup_createdAt(ctx, field)
+			case "devices":
+				return ec.fieldContext_UserGroup_devices(ctx, field)
+			case "users":
+				return ec.fieldContext_UserGroup_users(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserGroup", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addDeviceToUserGroup_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_oauthLogin(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_oauthLogin(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().OauthLogin(rctx, fc.Args["provider"].(model.OAuthProvider), fc.Args["token"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.AuthPayload)
+	fc.Result = res
+	return ec.marshalNAuthPayload2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐAuthPayload(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_oauthLogin(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "user":
+				return ec.fieldContext_AuthPayload_user(ctx, field)
+			case "token":
+				return ec.fieldContext_AuthPayload_token(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type AuthPayload", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_oauthLogin_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -4964,6 +5699,39 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_ResendVerificationEmail(ctx, field)
 			})
+		case "RequestForgotPassword":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_RequestForgotPassword(ctx, field)
+			})
+		case "ForgotPasswordHandler":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_ForgotPasswordHandler(ctx, field)
+			})
+		case "changeEmail":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_changeEmail(ctx, field)
+			})
+		case "createUserGroup":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createUserGroup(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addDeviceToUserGroup":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addDeviceToUserGroup(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "oauthLogin":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_oauthLogin(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -5791,6 +6559,16 @@ func (ec *executionContext) marshalNInt2int32(ctx context.Context, sel ast.Selec
 	return res
 }
 
+func (ec *executionContext) unmarshalNOAuthProvider2ETᚑSensorAPIᚋgraphᚋmodelᚐOAuthProvider(ctx context.Context, v any) (model.OAuthProvider, error) {
+	var res model.OAuthProvider
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNOAuthProvider2ETᚑSensorAPIᚋgraphᚋmodelᚐOAuthProvider(ctx context.Context, sel ast.SelectionSet, v model.OAuthProvider) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNString2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalString(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -5873,6 +6651,10 @@ func (ec *executionContext) marshalNUser2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐUse
 		return graphql.Null
 	}
 	return ec._User(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNUserGroup2ETᚑSensorAPIᚋgraphᚋmodelᚐUserGroup(ctx context.Context, sel ast.SelectionSet, v model.UserGroup) graphql.Marshaler {
+	return ec._UserGroup(ctx, sel, &v)
 }
 
 func (ec *executionContext) marshalNUserGroup2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐUserGroupᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.UserGroup) graphql.Marshaler {

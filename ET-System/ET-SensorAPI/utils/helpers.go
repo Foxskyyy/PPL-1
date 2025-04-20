@@ -29,27 +29,29 @@ func FetchUserGroupIDs(userID uint) []int {
 }
 
 func FetchGroupUsers(groupID uint) []*model.User {
-	var memberships []models.UserGroupMember
-	config.DB.Where("user_group_id = ?", groupID).Find(&memberships)
-
-	var users []*model.User
-	for _, m := range memberships {
-		var user models.User
-		if err := config.DB.First(&user, m.UserID).Error; err == nil {
-			groupInts := FetchUserGroupIDs(user.ID)
-			var userGroups []*model.UserGroup
-			for _, id := range groupInts {
-				userGroups = append(userGroups, &model.UserGroup{ID: strconv.Itoa(id)})
-			}
-			users = append(users, &model.User{
-				ID:       strconv.Itoa(int(user.ID)),
-				Username: user.Username,
-				Email:    user.Email,
-				Groups:   userGroups,
-			})
-		}
+	var members []models.UserGroupMember
+	config.DB.Where("user_group_id = ?", groupID).Find(&members)
+	userIDs := make([]uint, 0, len(members))
+	for _, m := range members {
+		userIDs = append(userIDs, m.UserID)
 	}
-	return users
+	var users []models.User
+	if len(userIDs) > 0 {
+		config.DB.Where("id IN ?", userIDs).Find(&users)
+	}
+	result := make([]*model.User, 0, len(users))
+	for _, u := range users {
+		displayName := &u.DisplayName
+		result = append(result, &model.User{
+			ID:          strconv.Itoa(int(u.ID)),
+			Username:    u.Username,
+			Email:       u.Email,
+			DisplayName: displayName,
+			Verified:    u.Verified,
+			CreatedAt:   u.CreatedAt,
+		})
+	}
+	return result
 }
 
 func FetchDeviceByID(deviceID string) (*models.Device, error) {

@@ -44,6 +44,8 @@ type AuthPayload {
   token: String!
 }
 
+enum OAuthProvider { GOOGLE APPLE }
+
 type Query {
   users: [User!]!
   userGroups: [UserGroup!]!
@@ -54,8 +56,14 @@ type Query {
 
 type Mutation {
   login(email: String!, password: String!): AuthPayload!
-  register(username: String!, email: String!, password: String!): String
-  assignUserToGroup(userID: Int!, userGroupID: Int!): String
+  register(displayName: String!, username: String!, email: String!, password: String!): String
+  assignUserToGroup(email: String!, userGroupID: Int!): String
   verifyEmail(email: String!, token: String!): String
   ResendVerificationEmail(email: String!): String
+  RequestForgotPassword(email: String!): String
+  ForgotPasswordHandler(email: String!, password: String!): String
+  changeEmail(email: String!, password: String!, newemail: String!): String
+  createUserGroup(userID: Int!, groupName: String!): UserGroup!
+  addDeviceToUserGroup(deviceId: String!, deviceName: String!, userGroupID: Int!, location: String!): UserGroup!
+  oauthLogin(provider: OAuthProvider!, token: String!): AuthPayload!
 }

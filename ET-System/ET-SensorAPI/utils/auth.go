@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -9,24 +10,74 @@ import (
 	"os"
 	"time"
 
+	"github.com/golang-jwt/jwt/v4"
+	"github.com/lestrrat-go/jwx/v2/jwk"
 	"golang.org/x/crypto/bcrypt"
 
 	"ET-SensorAPI/config"
 	"ET-SensorAPI/models"
-
-	"github.com/golang-jwt/jwt/v4"
 )
 
-var secretKey = []byte(os.Getenv("JWT_SECRET"))
+const otpChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 type Claims struct {
 	UserID uint `json:"user_id"`
 	jwt.RegisteredClaims
 }
 
-const otpChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+func getSecretKey() []byte {
+	key := os.Getenv("JWT_SECRET")
+	if key == "" {
+		panic("JWT_SECRET not set")
+	}
+	return []byte(key)
+}
+
+func ValidateAppleToken(token string) (map[string]interface{}, error) {
+	set, err := jwk.Fetch(context.Background(), "https://appleid.apple.com/auth/keys")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch Apple keys: %w", err)
+	}
+
+	parsedToken, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+		kid, ok := t.Header["kid"].(string)
+		if !ok {
+			return nil, errors.New("missing kid in header")
+		}
+		key, found := set.LookupKeyID(kid)
+		if !found {
+			return nil, fmt.Errorf("unable to find key with kid: %s", kid)
+		}
+		var rawKey interface{}
+		if err := key.Raw(&rawKey); err != nil {
+			return nil, fmt.Errorf("failed to get raw key: %w", err)
+		}
+		return rawKey, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify token: %w", err)
+	}
+
+	claims, ok := parsedToken.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, errors.New("invalid token claims")
+	}
+
+	if claims["iss"] != "https://appleid.apple.com" {
+		return nil, errors.New("invalid issuer")
+	}
+
+	clientID := config.GetEnv("APPLE_CLIENT_ID", "")
+	if claims["aud"] != clientID {
+		return nil, errors.New("invalid audience")
+	}
+
+	return claims, nil
+}
 
 func GenerateToken(userID uint) (string, string, error) {
+	secretKey := getSecretKey()
+
 	accessTokenClaims := &Claims{
 		UserID: userID,
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -55,6 +106,8 @@ func GenerateToken(userID uint) (string, string, error) {
 }
 
 func ValidateToken(tokenString string) (*Claims, error) {
+	secretKey := getSecretKey()
+
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		return secretKey, nil
 	})
@@ -76,6 +129,12 @@ func AuthenticateUser(email, password string) (*models.User, error) {
 	if result.Error != nil {
 		return nil, errors.New("invalid email or password")
 	}
+
+	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
+	if err != nil {
+		return nil, errors.New("invalid email or password")
+	}
+
 	return &user, nil
 }
 
@@ -111,6 +170,10 @@ func SendVerificationEmail(email, token string) error {
 
 	from := os.Getenv("SMTP_EMAIL")
 	password := os.Getenv("SMTP_PASSWORD")
+	if from == "" || password == "" {
+		return errors.New("SMTP credentials are not set")
+	}
+
 	to := []string{email}
 	smtpHost := "smtp.gmail.com"
 	smtpPort := "587"
@@ -119,51 +182,33 @@ func SendVerificationEmail(email, token string) error {
 	subjectSignup := "Subject: ECOTRACK | Email Verification\r\n"
 	mime := "MIME-version: 1.0;\r\nContent-Type: text/html; charset=\"UTF-8\";\r\n\r\n"
 
-	bodyLogin := fmt.Sprintf(`
-		<html>
-			<body style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px;">
-				<div style="max-width: 500px; margin: auto; background: #eee; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
-					<div style="text-align: center;">
-						<img src="https://api.interphaselabs.com/static/logo.png" width="200" style="margin-bottom: 20px;" />
-						<h2 style="color: #333;">Login Code</h2>
-						<p style="font-size: 16px; color: #666;">Here is your login approval code:</p>
-						<div style="font-size: 24px; font-weight: bold; color: #000; background: #ffffff; padding: 20px 30px; border-radius: 8px; display: inline-block; margin: 20px 0; line-height: 32px;">
-							%s
-						</div>
-						<p style="font-size: 14px; color: #999;">
-							If this request did not come from you, change your account password immediately to prevent further unauthorized access.
-						</p>
-					</div>
-				</div>
-			</body>
-		</html>
-	`, token)
-
-	bodySignup := fmt.Sprintf(`
-		<html>
-			<body style="font-family: Arial, sans-serif; background-color: #f9f9f9; padding: 40px;">
-				<div style="max-width: 500px; margin: auto; background: #eee; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
-					<div style="text-align: center;">
-						<img src="https://api.interphaselabs.com/static/logo.png" width="200" style="margin-bottom: 20px;" />
-						<h2 style="color: #333;">Email Verification Code</h2>
-						<p style="font-size: 16px; color: #666;">Here is your email verification code:</p>
-						<div style="font-size: 24px; font-weight: bold; color: #000; background: #ffffff; padding: 20px 100px; border-radius: 8px; display: inline-block; margin: 20px 0; line-height: 32px;">
-							%s
-						</div>
-						<p style="font-size: 14px; color: #999;">
-							If this request did not come from you, change your account password immediately to prevent further unauthorized access.
-						</p>
-					</div>
-				</div>
-			</body>
-		</html>
-	`, token)
+	bodyTemplate := `
+	<html>
+	<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; text-align: center;">
+		<div style="max-width: 500px; background-color: #ffffff; padding: 20px; margin: 0 auto; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); text-align: center;">
+		<div style="background-color: #63AF2F; padding: 20px; border-top-left-radius: 8px; border-top-right-radius: 8px;">
+			<img src="https://api.interphaselabs.com/static/logo.png" alt="EcoTrack Logo" style="max-width: 300px; margin-bottom: 10px;" />
+		</div>
+		<h2 style="color: #333;">Verification Code</h2>
+		<p style="font-size: 16px; color: #555;">Hi!</p>
+		<p style="font-size: 16px; color: #555;">%s</p>
+		<div style="font-size: 32px; font-weight: bold; color: #000; letter-spacing: 5px; padding: 10px; border: 2px solid #ddd; display: inline-block; margin: 20px 0;">
+			%s
+		</div>
+		<p style="font-size: 14px; color: #555;">Please complete the account verification process in <b>15 minutes</b>.</p>
+		<p style="font-size: 14px; color: #63AF2F; font-weight: bold;">EcoTrack</p>
+		<p style="font-size: 12px; color: #888; margin-top: 20px;">This is an automated email. Please do not reply to this email.</p>
+		</div>
+	</body>
+	</html>`
 
 	var message []byte
 	if user.Verified {
-		message = []byte(subjectLogin + mime + bodyLogin)
+		body := fmt.Sprintf(bodyTemplate, "Here is your login verification code", token)
+		message = []byte(subjectLogin + mime + body)
 	} else {
-		message = []byte(subjectSignup + mime + bodySignup)
+		body := fmt.Sprintf(bodyTemplate, "Here is your email verification code", token)
+		message = []byte(subjectSignup + mime + body)
 	}
 
 	auth := smtp.PlainAuth("", from, password, smtpHost)

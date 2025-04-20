@@ -50,8 +50,7 @@ func AnalyzeUsageData(input string) (string, error) {
 
 	requestBody, _ := json.Marshal(OllamaRequest{
 		Model:  "deepseek-r1:8b",
-		Prompt: "Analyze the following water usage data and provide insights: " + input,
-	})
+		Prompt: "Analyze the water usage data extracted from the provided database and deliver detailed insights. Begin by summarizing the key statistics such as total consumption, average daily usage, peak usage periods, and any noticeable trends over time. Then, identify patterns or anomalies, and provide actionable recommendations for optimizing water usage based on the analyzed data. # Steps 1. Review the water usage data from the database. 2. Calculate total, average, and peak usage metrics. 3. Detect trends, seasonal variances, or irregularities. 4. Generate insights that help understand usage behavior. 5. Suggest practical recommendations to improve water efficiency. # Output Format Provide a comprehensive analytical report in clear, structured paragraphs including: - Summary statistics with numeric details - Interpretations of patterns and anomalies - Practical recommendations or possible actions Use clear language suitable for stakeholders without technical expertise. " + input})
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
