@@ -123,7 +123,7 @@ func ValidateToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
-func AuthenticateUser(email, password string) (*models.User, error) {
+func AuthenticateUser(email string, password string) (*models.User, error) {
 	var user models.User
 	result := config.DB.Where("email = ?", email).First(&user)
 	if result.Error != nil {

@@ -9,7 +9,6 @@ import (
 
 type User struct {
 	ID           uint      `json:"id" gorm:"primaryKey"`
-	Username     string    `json:"username" gorm:"unique"`
 	Email        string    `json:"email" gorm:"unique"`
 	Password     string    `json:"-"`
 	DisplayName  string    `json:"displayname"`
@@ -17,7 +16,7 @@ type User struct {
 	Verified     bool      `json:"verified" gorm:"default:false"`
 	VerifyToken  string    `json:"verify_token" gorm:"default:null"`
 	Provider     string    `json:"provider"`
-	ProviderID   string    `json:"provider_id" gorm:"unique"`
+	ProviderID   string    `json:"provider_id"`
 	CreatedAt    time.Time `json:"created_at"`
 }
 

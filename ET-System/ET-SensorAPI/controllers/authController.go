@@ -14,7 +14,6 @@ import (
 
 func Register(c *gin.Context) {
 	var input struct {
-		Username string `json:"username" binding:"required"`
 		Email    string `json:"email" binding:"required,email"`
 		Password string `json:"password" binding:"required,min=6"`
 	}
@@ -42,7 +41,6 @@ func Register(c *gin.Context) {
 	otpToken, _ := utils.GenerateOTP()
 
 	user := models.User{
-		Username:    input.Username,
 		Email:       input.Email,
 		Password:    string(hashedPassword),
 		Verified:    false,
@@ -104,8 +102,6 @@ func Login(c *gin.Context) {
 	accessToken, refreshToken, _ := utils.GenerateToken(user.ID)
 	user.RefreshToken = refreshToken
 	config.DB.Save(&user)
-
-	fmt.Println(user.Username + "logged in")
 
 	c.JSON(http.StatusOK, gin.H{"access_token": accessToken, "refresh_token": refreshToken})
 }

@@ -28,6 +28,11 @@ type Device struct {
 	WaterUsages []*WaterUsage `json:"waterUsages"`
 }
 
+type MonthlyWaterUsage struct {
+	TotalUsage float64       `json:"totalUsage"`
+	Usages     []*WaterUsage `json:"usages"`
+}
+
 type Mutation struct {
 }
 
@@ -36,7 +41,6 @@ type Query struct {
 
 type User struct {
 	ID          string       `json:"id"`
-	Username    string       `json:"username"`
 	Email       string       `json:"email"`
 	DisplayName *string      `json:"displayName,omitempty"`
 	Verified    bool         `json:"verified"`
@@ -58,6 +62,11 @@ type WaterUsage struct {
 	FlowRate   float64   `json:"flowRate"`
 	TotalUsage float64   `json:"totalUsage"`
 	RecordedAt time.Time `json:"recordedAt"`
+}
+
+type WaterUsageComparison struct {
+	CurrentMonth  *MonthlyWaterUsage `json:"currentMonth"`
+	PreviousMonth *MonthlyWaterUsage `json:"previousMonth"`
 }
 
 type OAuthProvider string

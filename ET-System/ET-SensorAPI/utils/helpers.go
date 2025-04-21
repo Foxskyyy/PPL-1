@@ -44,7 +44,6 @@ func FetchGroupUsers(groupID uint) []*model.User {
 		displayName := &u.DisplayName
 		result = append(result, &model.User{
 			ID:          strconv.Itoa(int(u.ID)),
-			Username:    u.Username,
 			Email:       u.Email,
 			DisplayName: displayName,
 			Verified:    u.Verified,

@@ -2,7 +2,6 @@ scalar Time
 
 type User {
   id: ID!
-  username: String!
   email: String!
   displayName: String
   verified: Boolean!
@@ -44,6 +43,16 @@ type AuthPayload {
   token: String!
 }
 
+type WaterUsageComparison {
+  currentMonth: MonthlyWaterUsage!
+  previousMonth: MonthlyWaterUsage!
+}
+
+type MonthlyWaterUsage {
+  totalUsage: Float!
+  usages: [WaterUsage!]!
+}
+
 enum OAuthProvider { GOOGLE APPLE }
 
 type Query {
@@ -52,11 +61,12 @@ type Query {
   devices: [Device!]!
   waterUsages: [WaterUsage!]!
   deepSeekAnalysis(userID: Int!): DeepSeekResponse
+  waterUsageComparisonByGroup(groupID: Int!): WaterUsageComparison!
 }
 
 type Mutation {
   login(email: String!, password: String!): AuthPayload!
-  register(displayName: String!, username: String!, email: String!, password: String!): String
+  register(displayName: String!, email: String!, password: String!): String
   assignUserToGroup(email: String!, userGroupID: Int!): String
   verifyEmail(email: String!, token: String!): String
   ResendVerificationEmail(email: String!): String
@@ -66,4 +76,5 @@ type Mutation {
   createUserGroup(userID: Int!, groupName: String!): UserGroup!
   addDeviceToUserGroup(deviceId: String!, deviceName: String!, userGroupID: Int!, location: String!): UserGroup!
   oauthLogin(provider: OAuthProvider!, token: String!): AuthPayload!
+  logout(email: String!): String
 }
