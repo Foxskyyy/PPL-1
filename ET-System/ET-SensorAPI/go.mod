@@ -3,6 +3,7 @@ module ET-SensorAPI
 go 1.24.2
 
 require (
+	cloud.google.com/go/auth v0.16.0
 	github.com/99designs/gqlgen v0.17.72
 	github.com/gin-contrib/cors v1.7.5
 	github.com/gin-gonic/gin v1.10.0
@@ -11,14 +12,11 @@ require (
 	github.com/lestrrat-go/jwx/v2 v2.1.5
 	github.com/vektah/gqlparser/v2 v2.5.25
 	golang.org/x/crypto v0.37.0
-	google.golang.org/api v0.229.0
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.25.12
 )
 
 require (
-	cloud.google.com/go/auth v0.16.0 // indirect
-	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/bytedance/sonic v1.13.2 // indirect
@@ -70,7 +68,6 @@ require (
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	golang.org/x/arch v0.15.0 // indirect
 	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/oauth2 v0.29.0 // indirect
 	golang.org/x/sync v0.13.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.24.0 // indirect

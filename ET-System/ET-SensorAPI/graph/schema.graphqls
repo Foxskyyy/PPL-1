@@ -61,7 +61,6 @@ type Query {
   devices: [Device!]!
   waterUsages: [WaterUsage!]!
   deepSeekAnalysis(userID: Int!): DeepSeekResponse
-  waterUsageComparisonByGroup(groupID: Int!): WaterUsageComparison!
 }
 
 type Mutation {
