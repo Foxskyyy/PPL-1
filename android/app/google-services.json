@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "147912338941",
+    "project_id": "ecotrack-1ffc7",
+    "storage_bucket": "ecotrack-1ffc7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:147912338941:android:e608db11b2c4a01da53d94",
+        "android_client_info": {
+          "package_name": "com.example.front_end"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "147912338941-b32r82h2h4aqnhq0k1rpihcqk1bmcsk3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.front_end",
+            "certificate_hash": "2322284977ed86fd8c9edf38154af8c64cc026f1"
+          }
+        },
+        {
+          "client_id": "147912338941-glpq5egdkjkmhe6k2quuc2jeadlnogfs.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCr8XttiPq1SDRQHKlaeuzLhGQBCHHQ3ug"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "147912338941-glpq5egdkjkmhe6k2quuc2jeadlnogfs.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "147912338941-8lnlqhj47mg3hp2uuqi8p5fik2j7q9mf.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.ecotrack"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
