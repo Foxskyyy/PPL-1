@@ -10,10 +10,27 @@ import (
 	"time"
 )
 
+type WaterData interface {
+	IsWaterData()
+}
+
 type AuthPayload struct {
 	User  *User  `json:"user"`
 	Token string `json:"token"`
 }
+
+type DailyData struct {
+	Date       string        `json:"date"`
+	Hourly     []*WaterUsage `json:"hourly"`
+	TotalUsage float64       `json:"totalUsage"`
+	AvgFlow    float64       `json:"avgFlow"`
+}
+
+type DailyDataList struct {
+	Data []*DailyData `json:"data"`
+}
+
+func (DailyDataList) IsWaterData() {}
 
 type DeepSeekResponse struct {
 	Analysis *string `json:"analysis,omitempty"`
@@ -28,12 +45,34 @@ type Device struct {
 	WaterUsages []*WaterUsage `json:"waterUsages"`
 }
 
+type DeviceUsageData struct {
+	ID       string  `json:"id"`
+	Location string  `json:"Location"`
+	Usage    float64 `json:"Usage"`
+}
+
+type MonthlyData struct {
+	Month      string       `json:"month"`
+	Days       []*DailyData `json:"days"`
+	TotalUsage float64      `json:"totalUsage"`
+	AvgFlow    float64      `json:"avgFlow"`
+}
+
+func (MonthlyData) IsWaterData() {}
+
 type MonthlyWaterUsage struct {
 	TotalUsage float64       `json:"totalUsage"`
 	Usages     []*WaterUsage `json:"usages"`
 }
 
 type Mutation struct {
+}
+
+type Notification struct {
+	ID        string    `json:"id"`
+	Device    *Device   `json:"device"`
+	Message   string    `json:"message"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type Query struct {
@@ -54,6 +93,7 @@ type UserGroup struct {
 	CreatedAt time.Time `json:"createdAt"`
 	Devices   []*Device `json:"devices"`
 	Users     []*User   `json:"users"`
+	Location  []string  `json:"location"`
 }
 
 type WaterUsage struct {
@@ -68,6 +108,21 @@ type WaterUsageComparison struct {
 	CurrentMonth  *MonthlyWaterUsage `json:"currentMonth"`
 	PreviousMonth *MonthlyWaterUsage `json:"previousMonth"`
 }
+
+type WaterUsageList struct {
+	Data []*WaterUsage `json:"data"`
+}
+
+func (WaterUsageList) IsWaterData() {}
+
+type YearlyData struct {
+	Year       string         `json:"year"`
+	Months     []*MonthlyData `json:"months"`
+	TotalUsage float64        `json:"totalUsage"`
+	AvgFlow    float64        `json:"avgFlow"`
+}
+
+func (YearlyData) IsWaterData() {}
 
 type OAuthProvider string
 

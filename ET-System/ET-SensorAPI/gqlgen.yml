@@ -36,14 +36,15 @@ model:
 # Where should the resolver implementations go?
 resolver:
   package: graph
-  layout: follow-schema # Only other option is "single-file."
+  # layout: follow-schema # Only other option is "single-file."
+  layout: single-file # Only other option is "single-file."
 
   # Only for single-file layout:
-  # filename: graph/resolver.go
+  filename: graph/schema.resolvers.go
 
   # Only for follow-schema layout:
-  dir: graph
-  filename_template: "{name}.resolvers.go"
+  # dir: graph
+  # filename_template: "{name}.resolvers.go"
 
   # Optional: turn on to not generate template comments above resolvers
   # omit_template_comment: false

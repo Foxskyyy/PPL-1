@@ -53,6 +53,17 @@ type ComplexityRoot struct {
 		User  func(childComplexity int) int
 	}
 
+	DailyData struct {
+		AvgFlow    func(childComplexity int) int
+		Date       func(childComplexity int) int
+		Hourly     func(childComplexity int) int
+		TotalUsage func(childComplexity int) int
+	}
+
+	DailyDataList struct {
+		Data func(childComplexity int) int
+	}
+
 	DeepSeekResponse struct {
 		Analysis func(childComplexity int) int
 	}
@@ -66,6 +77,19 @@ type ComplexityRoot struct {
 		WaterUsages func(childComplexity int) int
 	}
 
+	DeviceUsageData struct {
+		ID       func(childComplexity int) int
+		Location func(childComplexity int) int
+		Usage    func(childComplexity int) int
+	}
+
+	MonthlyData struct {
+		AvgFlow    func(childComplexity int) int
+		Days       func(childComplexity int) int
+		Month      func(childComplexity int) int
+		TotalUsage func(childComplexity int) int
+	}
+
 	MonthlyWaterUsage struct {
 		TotalUsage func(childComplexity int) int
 		Usages     func(childComplexity int) int
@@ -73,25 +97,38 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AddDeviceToUserGroup    func(childComplexity int, deviceID string, deviceName string, userGroupID int32, location string) int
-		AssignUserToGroup       func(childComplexity int, email string, userGroupID int32) int
+		AddLocation             func(childComplexity int, groupID int32, locationName string) int
+		AssignUserToGroup       func(childComplexity int, senderEmail string, userGroupID int32, receiverEmail string) int
 		ChangeEmail             func(childComplexity int, email string, password string, newemail string) int
+		CheckUsageNotifications func(childComplexity int) int
 		CreateUserGroup         func(childComplexity int, userID int32, groupName string) int
 		ForgotPasswordHandler   func(childComplexity int, email string, password string) int
 		Login                   func(childComplexity int, email string, password string) int
 		Logout                  func(childComplexity int, email string) int
 		OauthLogin              func(childComplexity int, provider model.OAuthProvider, token string) int
 		Register                func(childComplexity int, displayName string, email string, password string) int
+		RemoveDevice            func(childComplexity int, groupID int32, deviceID string) int
 		RequestForgotPassword   func(childComplexity int, email string) int
 		ResendVerificationEmail func(childComplexity int, email string) int
 		VerifyEmail             func(childComplexity int, email string, token string) int
 	}
 
+	Notification struct {
+		CreatedAt func(childComplexity int) int
+		Device    func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Message   func(childComplexity int) int
+	}
+
 	Query struct {
 		DeepSeekAnalysis func(childComplexity int, userID int32) int
+		DeviceUsage      func(childComplexity int, groupID int32) int
 		Devices          func(childComplexity int) int
+		Notifications    func(childComplexity int) int
 		UserGroups       func(childComplexity int) int
 		Users            func(childComplexity int) int
 		WaterUsages      func(childComplexity int) int
+		WaterUsagesData  func(childComplexity int, deviceID string, timeFilter string) int
 	}
 
 	User struct {
@@ -107,6 +144,7 @@ type ComplexityRoot struct {
 		CreatedAt func(childComplexity int) int
 		Devices   func(childComplexity int) int
 		ID        func(childComplexity int) int
+		Location  func(childComplexity int) int
 		Name      func(childComplexity int) int
 		Users     func(childComplexity int) int
 	}
@@ -123,12 +161,23 @@ type ComplexityRoot struct {
 		CurrentMonth  func(childComplexity int) int
 		PreviousMonth func(childComplexity int) int
 	}
+
+	WaterUsageList struct {
+		Data func(childComplexity int) int
+	}
+
+	YearlyData struct {
+		AvgFlow    func(childComplexity int) int
+		Months     func(childComplexity int) int
+		TotalUsage func(childComplexity int) int
+		Year       func(childComplexity int) int
+	}
 }
 
 type MutationResolver interface {
 	Login(ctx context.Context, email string, password string) (*model.AuthPayload, error)
 	Register(ctx context.Context, displayName string, email string, password string) (*string, error)
-	AssignUserToGroup(ctx context.Context, email string, userGroupID int32) (*string, error)
+	AssignUserToGroup(ctx context.Context, senderEmail string, userGroupID int32, receiverEmail string) (*string, error)
 	VerifyEmail(ctx context.Context, email string, token string) (*string, error)
 	ResendVerificationEmail(ctx context.Context, email string) (*string, error)
 	RequestForgotPassword(ctx context.Context, email string) (*string, error)
@@ -138,13 +187,19 @@ type MutationResolver interface {
 	AddDeviceToUserGroup(ctx context.Context, deviceID string, deviceName string, userGroupID int32, location string) (*model.UserGroup, error)
 	OauthLogin(ctx context.Context, provider model.OAuthProvider, token string) (*model.AuthPayload, error)
 	Logout(ctx context.Context, email string) (*string, error)
+	AddLocation(ctx context.Context, groupID int32, locationName string) (*string, error)
+	RemoveDevice(ctx context.Context, groupID int32, deviceID string) (*string, error)
+	CheckUsageNotifications(ctx context.Context) (bool, error)
 }
 type QueryResolver interface {
 	Users(ctx context.Context) ([]*model.User, error)
 	UserGroups(ctx context.Context) ([]*model.UserGroup, error)
 	Devices(ctx context.Context) ([]*model.Device, error)
+	DeviceUsage(ctx context.Context, groupID int32) ([]*model.DeviceUsageData, error)
 	WaterUsages(ctx context.Context) ([]*model.WaterUsage, error)
+	WaterUsagesData(ctx context.Context, deviceID string, timeFilter string) (model.WaterData, error)
 	DeepSeekAnalysis(ctx context.Context, userID int32) (*model.DeepSeekResponse, error)
+	Notifications(ctx context.Context) ([]*model.Notification, error)
 }
 
 type executableSchema struct {
@@ -179,6 +234,41 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.AuthPayload.User(childComplexity), true
+
+	case "DailyData.avgFlow":
+		if e.complexity.DailyData.AvgFlow == nil {
+			break
+		}
+
+		return e.complexity.DailyData.AvgFlow(childComplexity), true
+
+	case "DailyData.date":
+		if e.complexity.DailyData.Date == nil {
+			break
+		}
+
+		return e.complexity.DailyData.Date(childComplexity), true
+
+	case "DailyData.hourly":
+		if e.complexity.DailyData.Hourly == nil {
+			break
+		}
+
+		return e.complexity.DailyData.Hourly(childComplexity), true
+
+	case "DailyData.totalUsage":
+		if e.complexity.DailyData.TotalUsage == nil {
+			break
+		}
+
+		return e.complexity.DailyData.TotalUsage(childComplexity), true
+
+	case "DailyDataList.data":
+		if e.complexity.DailyDataList.Data == nil {
+			break
+		}
+
+		return e.complexity.DailyDataList.Data(childComplexity), true
 
 	case "DeepSeekResponse.analysis":
 		if e.complexity.DeepSeekResponse.Analysis == nil {
@@ -229,6 +319,55 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Device.WaterUsages(childComplexity), true
 
+	case "DeviceUsageData.id":
+		if e.complexity.DeviceUsageData.ID == nil {
+			break
+		}
+
+		return e.complexity.DeviceUsageData.ID(childComplexity), true
+
+	case "DeviceUsageData.Location":
+		if e.complexity.DeviceUsageData.Location == nil {
+			break
+		}
+
+		return e.complexity.DeviceUsageData.Location(childComplexity), true
+
+	case "DeviceUsageData.Usage":
+		if e.complexity.DeviceUsageData.Usage == nil {
+			break
+		}
+
+		return e.complexity.DeviceUsageData.Usage(childComplexity), true
+
+	case "MonthlyData.avgFlow":
+		if e.complexity.MonthlyData.AvgFlow == nil {
+			break
+		}
+
+		return e.complexity.MonthlyData.AvgFlow(childComplexity), true
+
+	case "MonthlyData.days":
+		if e.complexity.MonthlyData.Days == nil {
+			break
+		}
+
+		return e.complexity.MonthlyData.Days(childComplexity), true
+
+	case "MonthlyData.month":
+		if e.complexity.MonthlyData.Month == nil {
+			break
+		}
+
+		return e.complexity.MonthlyData.Month(childComplexity), true
+
+	case "MonthlyData.totalUsage":
+		if e.complexity.MonthlyData.TotalUsage == nil {
+			break
+		}
+
+		return e.complexity.MonthlyData.TotalUsage(childComplexity), true
+
 	case "MonthlyWaterUsage.totalUsage":
 		if e.complexity.MonthlyWaterUsage.TotalUsage == nil {
 			break
@@ -255,6 +394,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Mutation.AddDeviceToUserGroup(childComplexity, args["deviceId"].(string), args["deviceName"].(string), args["userGroupID"].(int32), args["location"].(string)), true
 
+	case "Mutation.addLocation":
+		if e.complexity.Mutation.AddLocation == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addLocation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.AddLocation(childComplexity, args["groupId"].(int32), args["locationName"].(string)), true
+
 	case "Mutation.assignUserToGroup":
 		if e.complexity.Mutation.AssignUserToGroup == nil {
 			break
@@ -265,7 +416,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Mutation.AssignUserToGroup(childComplexity, args["email"].(string), args["userGroupID"].(int32)), true
+		return e.complexity.Mutation.AssignUserToGroup(childComplexity, args["senderEmail"].(string), args["userGroupID"].(int32), args["receiverEmail"].(string)), true
 
 	case "Mutation.changeEmail":
 		if e.complexity.Mutation.ChangeEmail == nil {
@@ -278,6 +429,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Mutation.ChangeEmail(childComplexity, args["email"].(string), args["password"].(string), args["newemail"].(string)), true
+
+	case "Mutation.checkUsageNotifications":
+		if e.complexity.Mutation.CheckUsageNotifications == nil {
+			break
+		}
+
+		return e.complexity.Mutation.CheckUsageNotifications(childComplexity), true
 
 	case "Mutation.createUserGroup":
 		if e.complexity.Mutation.CreateUserGroup == nil {
@@ -351,6 +509,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Mutation.Register(childComplexity, args["displayName"].(string), args["email"].(string), args["password"].(string)), true
 
+	case "Mutation.removeDevice":
+		if e.complexity.Mutation.RemoveDevice == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_removeDevice_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.RemoveDevice(childComplexity, args["groupId"].(int32), args["deviceId"].(string)), true
+
 	case "Mutation.RequestForgotPassword":
 		if e.complexity.Mutation.RequestForgotPassword == nil {
 			break
@@ -387,6 +557,34 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Mutation.VerifyEmail(childComplexity, args["email"].(string), args["token"].(string)), true
 
+	case "Notification.createdAt":
+		if e.complexity.Notification.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.Notification.CreatedAt(childComplexity), true
+
+	case "Notification.device":
+		if e.complexity.Notification.Device == nil {
+			break
+		}
+
+		return e.complexity.Notification.Device(childComplexity), true
+
+	case "Notification.id":
+		if e.complexity.Notification.ID == nil {
+			break
+		}
+
+		return e.complexity.Notification.ID(childComplexity), true
+
+	case "Notification.message":
+		if e.complexity.Notification.Message == nil {
+			break
+		}
+
+		return e.complexity.Notification.Message(childComplexity), true
+
 	case "Query.deepSeekAnalysis":
 		if e.complexity.Query.DeepSeekAnalysis == nil {
 			break
@@ -399,12 +597,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Query.DeepSeekAnalysis(childComplexity, args["userID"].(int32)), true
 
+	case "Query.deviceUsage":
+		if e.complexity.Query.DeviceUsage == nil {
+			break
+		}
+
+		args, err := ec.field_Query_deviceUsage_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.DeviceUsage(childComplexity, args["groupId"].(int32)), true
+
 	case "Query.devices":
 		if e.complexity.Query.Devices == nil {
 			break
 		}
 
 		return e.complexity.Query.Devices(childComplexity), true
+
+	case "Query.notifications":
+		if e.complexity.Query.Notifications == nil {
+			break
+		}
+
+		return e.complexity.Query.Notifications(childComplexity), true
 
 	case "Query.userGroups":
 		if e.complexity.Query.UserGroups == nil {
@@ -426,6 +643,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Query.WaterUsages(childComplexity), true
+
+	case "Query.waterUsagesData":
+		if e.complexity.Query.WaterUsagesData == nil {
+			break
+		}
+
+		args, err := ec.field_Query_waterUsagesData_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.WaterUsagesData(childComplexity, args["deviceId"].(string), args["timeFilter"].(string)), true
 
 	case "User.createdAt":
 		if e.complexity.User.CreatedAt == nil {
@@ -490,6 +719,13 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.UserGroup.ID(childComplexity), true
 
+	case "UserGroup.location":
+		if e.complexity.UserGroup.Location == nil {
+			break
+		}
+
+		return e.complexity.UserGroup.Location(childComplexity), true
+
 	case "UserGroup.name":
 		if e.complexity.UserGroup.Name == nil {
 			break
@@ -552,6 +788,41 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.WaterUsageComparison.PreviousMonth(childComplexity), true
+
+	case "WaterUsageList.data":
+		if e.complexity.WaterUsageList.Data == nil {
+			break
+		}
+
+		return e.complexity.WaterUsageList.Data(childComplexity), true
+
+	case "YearlyData.avgFlow":
+		if e.complexity.YearlyData.AvgFlow == nil {
+			break
+		}
+
+		return e.complexity.YearlyData.AvgFlow(childComplexity), true
+
+	case "YearlyData.months":
+		if e.complexity.YearlyData.Months == nil {
+			break
+		}
+
+		return e.complexity.YearlyData.Months(childComplexity), true
+
+	case "YearlyData.totalUsage":
+		if e.complexity.YearlyData.TotalUsage == nil {
+			break
+		}
+
+		return e.complexity.YearlyData.TotalUsage(childComplexity), true
+
+	case "YearlyData.year":
+		if e.complexity.YearlyData.Year == nil {
+			break
+		}
+
+		return e.complexity.YearlyData.Year(childComplexity), true
 
 	}
 	return 0, false
@@ -840,27 +1111,73 @@ func (ec *executionContext) field_Mutation_addDeviceToUserGroup_argsLocation(
 	return zeroVal, nil
 }
 
-func (ec *executionContext) field_Mutation_assignUserToGroup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+func (ec *executionContext) field_Mutation_addLocation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := ec.field_Mutation_assignUserToGroup_argsEmail(ctx, rawArgs)
+	arg0, err := ec.field_Mutation_addLocation_argsGroupID(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
-	args["email"] = arg0
+	args["groupId"] = arg0
+	arg1, err := ec.field_Mutation_addLocation_argsLocationName(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["locationName"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_addLocation_argsGroupID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int32, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("groupId"))
+	if tmp, ok := rawArgs["groupId"]; ok {
+		return ec.unmarshalNInt2int32(ctx, tmp)
+	}
+
+	var zeroVal int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_addLocation_argsLocationName(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("locationName"))
+	if tmp, ok := rawArgs["locationName"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_assignUserToGroup_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_assignUserToGroup_argsSenderEmail(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["senderEmail"] = arg0
 	arg1, err := ec.field_Mutation_assignUserToGroup_argsUserGroupID(ctx, rawArgs)
 	if err != nil {
 		return nil, err
 	}
 	args["userGroupID"] = arg1
+	arg2, err := ec.field_Mutation_assignUserToGroup_argsReceiverEmail(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["receiverEmail"] = arg2
 	return args, nil
 }
-func (ec *executionContext) field_Mutation_assignUserToGroup_argsEmail(
+func (ec *executionContext) field_Mutation_assignUserToGroup_argsSenderEmail(
 	ctx context.Context,
 	rawArgs map[string]any,
 ) (string, error) {
-	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("email"))
-	if tmp, ok := rawArgs["email"]; ok {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("senderEmail"))
+	if tmp, ok := rawArgs["senderEmail"]; ok {
 		return ec.unmarshalNString2string(ctx, tmp)
 	}
 
@@ -878,6 +1195,19 @@ func (ec *executionContext) field_Mutation_assignUserToGroup_argsUserGroupID(
 	}
 
 	var zeroVal int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_assignUserToGroup_argsReceiverEmail(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("receiverEmail"))
+	if tmp, ok := rawArgs["receiverEmail"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
 	return zeroVal, nil
 }
 
@@ -1145,6 +1475,47 @@ func (ec *executionContext) field_Mutation_register_argsPassword(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_removeDevice_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_removeDevice_argsGroupID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["groupId"] = arg0
+	arg1, err := ec.field_Mutation_removeDevice_argsDeviceID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["deviceId"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_removeDevice_argsGroupID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int32, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("groupId"))
+	if tmp, ok := rawArgs["groupId"]; ok {
+		return ec.unmarshalNInt2int32(ctx, tmp)
+	}
+
+	var zeroVal int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_removeDevice_argsDeviceID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("deviceId"))
+	if tmp, ok := rawArgs["deviceId"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_verifyEmail_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1229,6 +1600,70 @@ func (ec *executionContext) field_Query_deepSeekAnalysis_argsUserID(
 	}
 
 	var zeroVal int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_deviceUsage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_deviceUsage_argsGroupID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["groupId"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_deviceUsage_argsGroupID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int32, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("groupId"))
+	if tmp, ok := rawArgs["groupId"]; ok {
+		return ec.unmarshalNInt2int32(ctx, tmp)
+	}
+
+	var zeroVal int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_waterUsagesData_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_waterUsagesData_argsDeviceID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["deviceId"] = arg0
+	arg1, err := ec.field_Query_waterUsagesData_argsTimeFilter(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["timeFilter"] = arg1
+	return args, nil
+}
+func (ec *executionContext) field_Query_waterUsagesData_argsDeviceID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("deviceId"))
+	if tmp, ok := rawArgs["deviceId"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_waterUsagesData_argsTimeFilter(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("timeFilter"))
+	if tmp, ok := rawArgs["timeFilter"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
 	return zeroVal, nil
 }
 
@@ -1434,6 +1869,248 @@ func (ec *executionContext) fieldContext_AuthPayload_token(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _DailyData_date(ctx context.Context, field graphql.CollectedField, obj *model.DailyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DailyData_date(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Date, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DailyData_date(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DailyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DailyData_hourly(ctx context.Context, field graphql.CollectedField, obj *model.DailyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DailyData_hourly(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Hourly, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.WaterUsage)
+	fc.Result = res
+	return ec.marshalNWaterUsage2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐWaterUsageᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DailyData_hourly(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DailyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_WaterUsage_id(ctx, field)
+			case "device":
+				return ec.fieldContext_WaterUsage_device(ctx, field)
+			case "flowRate":
+				return ec.fieldContext_WaterUsage_flowRate(ctx, field)
+			case "totalUsage":
+				return ec.fieldContext_WaterUsage_totalUsage(ctx, field)
+			case "recordedAt":
+				return ec.fieldContext_WaterUsage_recordedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type WaterUsage", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DailyData_totalUsage(ctx context.Context, field graphql.CollectedField, obj *model.DailyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DailyData_totalUsage(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalUsage, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DailyData_totalUsage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DailyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DailyData_avgFlow(ctx context.Context, field graphql.CollectedField, obj *model.DailyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DailyData_avgFlow(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AvgFlow, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DailyData_avgFlow(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DailyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DailyDataList_data(ctx context.Context, field graphql.CollectedField, obj *model.DailyDataList) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DailyDataList_data(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Data, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.DailyData)
+	fc.Result = res
+	return ec.marshalNDailyData2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐDailyDataᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DailyDataList_data(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DailyDataList",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "date":
+				return ec.fieldContext_DailyData_date(ctx, field)
+			case "hourly":
+				return ec.fieldContext_DailyData_hourly(ctx, field)
+			case "totalUsage":
+				return ec.fieldContext_DailyData_totalUsage(ctx, field)
+			case "avgFlow":
+				return ec.fieldContext_DailyData_avgFlow(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DailyData", field.Name)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _DeepSeekResponse_analysis(ctx context.Context, field graphql.CollectedField, obj *model.DeepSeekResponse) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_DeepSeekResponse_analysis(ctx, field)
 	if err != nil {
@@ -1568,6 +2245,8 @@ func (ec *executionContext) fieldContext_Device_userGroup(_ context.Context, fie
 				return ec.fieldContext_UserGroup_devices(ctx, field)
 			case "users":
 				return ec.fieldContext_UserGroup_users(ctx, field)
+			case "location":
+				return ec.fieldContext_UserGroup_location(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type UserGroup", field.Name)
 		},
@@ -1758,6 +2437,324 @@ func (ec *executionContext) fieldContext_Device_waterUsages(_ context.Context, f
 				return ec.fieldContext_WaterUsage_recordedAt(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type WaterUsage", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeviceUsageData_id(ctx context.Context, field graphql.CollectedField, obj *model.DeviceUsageData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeviceUsageData_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DeviceUsageData_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeviceUsageData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeviceUsageData_Location(ctx context.Context, field graphql.CollectedField, obj *model.DeviceUsageData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeviceUsageData_Location(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Location, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DeviceUsageData_Location(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeviceUsageData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeviceUsageData_Usage(ctx context.Context, field graphql.CollectedField, obj *model.DeviceUsageData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_DeviceUsageData_Usage(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Usage, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_DeviceUsageData_Usage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeviceUsageData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MonthlyData_month(ctx context.Context, field graphql.CollectedField, obj *model.MonthlyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_MonthlyData_month(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Month, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_MonthlyData_month(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MonthlyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MonthlyData_days(ctx context.Context, field graphql.CollectedField, obj *model.MonthlyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_MonthlyData_days(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Days, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.DailyData)
+	fc.Result = res
+	return ec.marshalNDailyData2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐDailyDataᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_MonthlyData_days(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MonthlyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "date":
+				return ec.fieldContext_DailyData_date(ctx, field)
+			case "hourly":
+				return ec.fieldContext_DailyData_hourly(ctx, field)
+			case "totalUsage":
+				return ec.fieldContext_DailyData_totalUsage(ctx, field)
+			case "avgFlow":
+				return ec.fieldContext_DailyData_avgFlow(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DailyData", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MonthlyData_totalUsage(ctx context.Context, field graphql.CollectedField, obj *model.MonthlyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_MonthlyData_totalUsage(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalUsage, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_MonthlyData_totalUsage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MonthlyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _MonthlyData_avgFlow(ctx context.Context, field graphql.CollectedField, obj *model.MonthlyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_MonthlyData_avgFlow(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AvgFlow, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_MonthlyData_avgFlow(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MonthlyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
 		},
 	}
 	return fc, nil
@@ -1990,7 +2987,7 @@ func (ec *executionContext) _Mutation_assignUserToGroup(ctx context.Context, fie
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().AssignUserToGroup(rctx, fc.Args["email"].(string), fc.Args["userGroupID"].(int32))
+		return ec.resolvers.Mutation().AssignUserToGroup(rctx, fc.Args["senderEmail"].(string), fc.Args["userGroupID"].(int32), fc.Args["receiverEmail"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2337,6 +3334,8 @@ func (ec *executionContext) fieldContext_Mutation_createUserGroup(ctx context.Co
 				return ec.fieldContext_UserGroup_devices(ctx, field)
 			case "users":
 				return ec.fieldContext_UserGroup_users(ctx, field)
+			case "location":
+				return ec.fieldContext_UserGroup_location(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type UserGroup", field.Name)
 		},
@@ -2404,6 +3403,8 @@ func (ec *executionContext) fieldContext_Mutation_addDeviceToUserGroup(ctx conte
 				return ec.fieldContext_UserGroup_devices(ctx, field)
 			case "users":
 				return ec.fieldContext_UserGroup_users(ctx, field)
+			case "location":
+				return ec.fieldContext_UserGroup_location(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type UserGroup", field.Name)
 		},
@@ -2535,6 +3536,344 @@ func (ec *executionContext) fieldContext_Mutation_logout(ctx context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_addLocation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_addLocation(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().AddLocation(rctx, fc.Args["groupId"].(int32), fc.Args["locationName"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_addLocation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addLocation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_removeDevice(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_removeDevice(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().RemoveDevice(rctx, fc.Args["groupId"].(int32), fc.Args["deviceId"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_removeDevice(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_removeDevice_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_checkUsageNotifications(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_checkUsageNotifications(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().CheckUsageNotifications(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_checkUsageNotifications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_id(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_id(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.ID, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNID2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type ID does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_device(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_device(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Device, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.Device)
+	fc.Result = res
+	return ec.marshalNDevice2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐDevice(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_device(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Device_id(ctx, field)
+			case "userGroup":
+				return ec.fieldContext_Device_userGroup(ctx, field)
+			case "name":
+				return ec.fieldContext_Device_name(ctx, field)
+			case "location":
+				return ec.fieldContext_Device_location(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Device_createdAt(ctx, field)
+			case "waterUsages":
+				return ec.fieldContext_Device_waterUsages(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Device", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_message(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_message(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Message, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Notification_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Notification_createdAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CreatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Notification_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Notification",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_users(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_users(ctx, field)
 	if err != nil {
@@ -2642,6 +3981,8 @@ func (ec *executionContext) fieldContext_Query_userGroups(_ context.Context, fie
 				return ec.fieldContext_UserGroup_devices(ctx, field)
 			case "users":
 				return ec.fieldContext_UserGroup_users(ctx, field)
+			case "location":
+				return ec.fieldContext_UserGroup_location(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type UserGroup", field.Name)
 		},
@@ -2707,6 +4048,69 @@ func (ec *executionContext) fieldContext_Query_devices(_ context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_deviceUsage(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_deviceUsage(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().DeviceUsage(rctx, fc.Args["groupId"].(int32))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.DeviceUsageData)
+	fc.Result = res
+	return ec.marshalNDeviceUsageData2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐDeviceUsageDataᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_deviceUsage(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_DeviceUsageData_id(ctx, field)
+			case "Location":
+				return ec.fieldContext_DeviceUsageData_Location(ctx, field)
+			case "Usage":
+				return ec.fieldContext_DeviceUsageData_Usage(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DeviceUsageData", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_deviceUsage_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_waterUsages(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_waterUsages(ctx, field)
 	if err != nil {
@@ -2763,6 +4167,61 @@ func (ec *executionContext) fieldContext_Query_waterUsages(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _Query_waterUsagesData(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_waterUsagesData(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().WaterUsagesData(rctx, fc.Args["deviceId"].(string), fc.Args["timeFilter"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(model.WaterData)
+	fc.Result = res
+	return ec.marshalNWaterData2ETᚑSensorAPIᚋgraphᚋmodelᚐWaterData(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_waterUsagesData(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type WaterData does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_waterUsagesData_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_deepSeekAnalysis(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Query_deepSeekAnalysis(ctx, field)
 	if err != nil {
@@ -2815,6 +4274,60 @@ func (ec *executionContext) fieldContext_Query_deepSeekAnalysis(ctx context.Cont
 	if fc.Args, err = ec.field_Query_deepSeekAnalysis_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_notifications(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_notifications(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Notifications(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.Notification)
+	fc.Result = res
+	return ec.marshalNNotification2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐNotificationᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_notifications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_Notification_id(ctx, field)
+			case "device":
+				return ec.fieldContext_Notification_device(ctx, field)
+			case "message":
+				return ec.fieldContext_Notification_message(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_Notification_createdAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type Notification", field.Name)
+		},
 	}
 	return fc, nil
 }
@@ -3216,6 +4729,8 @@ func (ec *executionContext) fieldContext_User_groups(_ context.Context, field gr
 				return ec.fieldContext_UserGroup_devices(ctx, field)
 			case "users":
 				return ec.fieldContext_UserGroup_users(ctx, field)
+			case "location":
+				return ec.fieldContext_UserGroup_location(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type UserGroup", field.Name)
 		},
@@ -3466,6 +4981,50 @@ func (ec *executionContext) fieldContext_UserGroup_users(_ context.Context, fiel
 				return ec.fieldContext_User_groups(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserGroup_location(ctx context.Context, field graphql.CollectedField, obj *model.UserGroup) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserGroup_location(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Location, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	fc.Result = res
+	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserGroup_location(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserGroup",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
 		},
 	}
 	return fc, nil
@@ -3800,6 +5359,248 @@ func (ec *executionContext) fieldContext_WaterUsageComparison_previousMonth(_ co
 				return ec.fieldContext_MonthlyWaterUsage_usages(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type MonthlyWaterUsage", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _WaterUsageList_data(ctx context.Context, field graphql.CollectedField, obj *model.WaterUsageList) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_WaterUsageList_data(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Data, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.WaterUsage)
+	fc.Result = res
+	return ec.marshalNWaterUsage2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐWaterUsageᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_WaterUsageList_data(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "WaterUsageList",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_WaterUsage_id(ctx, field)
+			case "device":
+				return ec.fieldContext_WaterUsage_device(ctx, field)
+			case "flowRate":
+				return ec.fieldContext_WaterUsage_flowRate(ctx, field)
+			case "totalUsage":
+				return ec.fieldContext_WaterUsage_totalUsage(ctx, field)
+			case "recordedAt":
+				return ec.fieldContext_WaterUsage_recordedAt(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type WaterUsage", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _YearlyData_year(ctx context.Context, field graphql.CollectedField, obj *model.YearlyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_YearlyData_year(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Year, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	fc.Result = res
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_YearlyData_year(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "YearlyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _YearlyData_months(ctx context.Context, field graphql.CollectedField, obj *model.YearlyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_YearlyData_months(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Months, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*model.MonthlyData)
+	fc.Result = res
+	return ec.marshalNMonthlyData2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐMonthlyDataᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_YearlyData_months(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "YearlyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "month":
+				return ec.fieldContext_MonthlyData_month(ctx, field)
+			case "days":
+				return ec.fieldContext_MonthlyData_days(ctx, field)
+			case "totalUsage":
+				return ec.fieldContext_MonthlyData_totalUsage(ctx, field)
+			case "avgFlow":
+				return ec.fieldContext_MonthlyData_avgFlow(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type MonthlyData", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _YearlyData_totalUsage(ctx context.Context, field graphql.CollectedField, obj *model.YearlyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_YearlyData_totalUsage(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TotalUsage, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_YearlyData_totalUsage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "YearlyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _YearlyData_avgFlow(ctx context.Context, field graphql.CollectedField, obj *model.YearlyData) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_YearlyData_avgFlow(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.AvgFlow, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_YearlyData_avgFlow(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "YearlyData",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Float does not have child fields")
 		},
 	}
 	return fc, nil
@@ -5760,6 +7561,43 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    ************************** interface.gotpl ***************************
 
+func (ec *executionContext) _WaterData(ctx context.Context, sel ast.SelectionSet, obj model.WaterData) graphql.Marshaler {
+	switch obj := (obj).(type) {
+	case nil:
+		return graphql.Null
+	case model.YearlyData:
+		return ec._YearlyData(ctx, sel, &obj)
+	case *model.YearlyData:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._YearlyData(ctx, sel, obj)
+	case model.WaterUsageList:
+		return ec._WaterUsageList(ctx, sel, &obj)
+	case *model.WaterUsageList:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._WaterUsageList(ctx, sel, obj)
+	case model.MonthlyData:
+		return ec._MonthlyData(ctx, sel, &obj)
+	case *model.MonthlyData:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._MonthlyData(ctx, sel, obj)
+	case model.DailyDataList:
+		return ec._DailyDataList(ctx, sel, &obj)
+	case *model.DailyDataList:
+		if obj == nil {
+			return graphql.Null
+		}
+		return ec._DailyDataList(ctx, sel, obj)
+	default:
+		panic(fmt.Errorf("unexpected type %T", obj))
+	}
+}
+
 // endregion ************************** interface.gotpl ***************************
 
 // region    **************************** object.gotpl ****************************
@@ -5782,6 +7620,99 @@ func (ec *executionContext) _AuthPayload(ctx context.Context, sel ast.SelectionS
 			}
 		case "token":
 			out.Values[i] = ec._AuthPayload_token(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var dailyDataImplementors = []string{"DailyData"}
+
+func (ec *executionContext) _DailyData(ctx context.Context, sel ast.SelectionSet, obj *model.DailyData) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, dailyDataImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DailyData")
+		case "date":
+			out.Values[i] = ec._DailyData_date(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hourly":
+			out.Values[i] = ec._DailyData_hourly(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalUsage":
+			out.Values[i] = ec._DailyData_totalUsage(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgFlow":
+			out.Values[i] = ec._DailyData_avgFlow(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var dailyDataListImplementors = []string{"DailyDataList", "WaterData"}
+
+func (ec *executionContext) _DailyDataList(ctx context.Context, sel ast.SelectionSet, obj *model.DailyDataList) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, dailyDataListImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DailyDataList")
+		case "data":
+			out.Values[i] = ec._DailyDataList_data(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -5882,6 +7813,109 @@ func (ec *executionContext) _Device(ctx context.Context, sel ast.SelectionSet, o
 			}
 		case "waterUsages":
 			out.Values[i] = ec._Device_waterUsages(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var deviceUsageDataImplementors = []string{"DeviceUsageData"}
+
+func (ec *executionContext) _DeviceUsageData(ctx context.Context, sel ast.SelectionSet, obj *model.DeviceUsageData) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, deviceUsageDataImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DeviceUsageData")
+		case "id":
+			out.Values[i] = ec._DeviceUsageData_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "Location":
+			out.Values[i] = ec._DeviceUsageData_Location(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "Usage":
+			out.Values[i] = ec._DeviceUsageData_Usage(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var monthlyDataImplementors = []string{"MonthlyData", "WaterData"}
+
+func (ec *executionContext) _MonthlyData(ctx context.Context, sel ast.SelectionSet, obj *model.MonthlyData) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, monthlyDataImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MonthlyData")
+		case "month":
+			out.Values[i] = ec._MonthlyData_month(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "days":
+			out.Values[i] = ec._MonthlyData_days(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalUsage":
+			out.Values[i] = ec._MonthlyData_totalUsage(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgFlow":
+			out.Values[i] = ec._MonthlyData_avgFlow(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -6031,6 +8065,75 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_logout(ctx, field)
 			})
+		case "addLocation":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addLocation(ctx, field)
+			})
+		case "removeDevice":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_removeDevice(ctx, field)
+			})
+		case "checkUsageNotifications":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_checkUsageNotifications(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var notificationImplementors = []string{"Notification"}
+
+func (ec *executionContext) _Notification(ctx context.Context, sel ast.SelectionSet, obj *model.Notification) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, notificationImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Notification")
+		case "id":
+			out.Values[i] = ec._Notification_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "device":
+			out.Values[i] = ec._Notification_device(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._Notification_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Notification_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -6139,6 +8242,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "deviceUsage":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_deviceUsage(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "waterUsages":
 			field := field
 
@@ -6161,6 +8286,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "waterUsagesData":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_waterUsagesData(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "deepSeekAnalysis":
 			field := field
 
@@ -6171,6 +8318,28 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_deepSeekAnalysis(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "notifications":
+			field := field
+
+			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_notifications(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&fs.Invalids, 1)
+				}
 				return res
 			}
 
@@ -6308,6 +8477,11 @@ func (ec *executionContext) _UserGroup(ctx context.Context, sel ast.SelectionSet
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "location":
+			out.Values[i] = ec._UserGroup_location(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -6408,6 +8582,99 @@ func (ec *executionContext) _WaterUsageComparison(ctx context.Context, sel ast.S
 			}
 		case "previousMonth":
 			out.Values[i] = ec._WaterUsageComparison_previousMonth(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var waterUsageListImplementors = []string{"WaterUsageList", "WaterData"}
+
+func (ec *executionContext) _WaterUsageList(ctx context.Context, sel ast.SelectionSet, obj *model.WaterUsageList) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, waterUsageListImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("WaterUsageList")
+		case "data":
+			out.Values[i] = ec._WaterUsageList_data(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var yearlyDataImplementors = []string{"YearlyData", "WaterData"}
+
+func (ec *executionContext) _YearlyData(ctx context.Context, sel ast.SelectionSet, obj *model.YearlyData) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, yearlyDataImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("YearlyData")
+		case "year":
+			out.Values[i] = ec._YearlyData_year(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "months":
+			out.Values[i] = ec._YearlyData_months(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "totalUsage":
+			out.Values[i] = ec._YearlyData_totalUsage(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "avgFlow":
+			out.Values[i] = ec._YearlyData_avgFlow(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -6789,6 +9056,7 @@ func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (
 }
 
 func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.SelectionSet, v bool) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalBoolean(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -6796,6 +9064,60 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNDailyData2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐDailyDataᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.DailyData) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNDailyData2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐDailyData(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNDailyData2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐDailyData(ctx context.Context, sel ast.SelectionSet, v *model.DailyData) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._DailyData(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNDevice2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐDeviceᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Device) graphql.Marshaler {
@@ -6852,12 +9174,67 @@ func (ec *executionContext) marshalNDevice2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐD
 	return ec._Device(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNDeviceUsageData2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐDeviceUsageDataᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.DeviceUsageData) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNDeviceUsageData2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐDeviceUsageData(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNDeviceUsageData2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐDeviceUsageData(ctx context.Context, sel ast.SelectionSet, v *model.DeviceUsageData) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._DeviceUsageData(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNFloat2float64(ctx context.Context, v any) (float64, error) {
 	res, err := graphql.UnmarshalFloatContext(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.SelectionSet, v float64) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalFloatContext(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -6873,6 +9250,7 @@ func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (str
 }
 
 func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalID(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -6888,6 +9266,7 @@ func (ec *executionContext) unmarshalNInt2int32(ctx context.Context, v any) (int
 }
 
 func (ec *executionContext) marshalNInt2int32(ctx context.Context, sel ast.SelectionSet, v int32) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalInt32(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -6895,6 +9274,60 @@ func (ec *executionContext) marshalNInt2int32(ctx context.Context, sel ast.Selec
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNMonthlyData2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐMonthlyDataᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.MonthlyData) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNMonthlyData2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐMonthlyData(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNMonthlyData2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐMonthlyData(ctx context.Context, sel ast.SelectionSet, v *model.MonthlyData) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._MonthlyData(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNMonthlyWaterUsage2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐMonthlyWaterUsage(ctx context.Context, sel ast.SelectionSet, v *model.MonthlyWaterUsage) graphql.Marshaler {
@@ -6905,6 +9338,60 @@ func (ec *executionContext) marshalNMonthlyWaterUsage2ᚖETᚑSensorAPIᚋgraph�
 		return graphql.Null
 	}
 	return ec._MonthlyWaterUsage(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNNotification2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐNotificationᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Notification) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNNotification2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐNotification(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNNotification2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐNotification(ctx context.Context, sel ast.SelectionSet, v *model.Notification) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._Notification(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNOAuthProvider2ETᚑSensorAPIᚋgraphᚋmodelᚐOAuthProvider(ctx context.Context, v any) (model.OAuthProvider, error) {
@@ -6923,6 +9410,7 @@ func (ec *executionContext) unmarshalNString2string(ctx context.Context, v any) 
 }
 
 func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -6932,12 +9420,43 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	return res
 }
 
+func (ec *executionContext) unmarshalNString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	var vSlice []any
+	vSlice = graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNString2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNString2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNString2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalNTime2timeᚐTime(ctx context.Context, v any) (time.Time, error) {
 	res, err := graphql.UnmarshalTime(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNTime2timeᚐTime(ctx context.Context, sel ast.SelectionSet, v time.Time) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalTime(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -7059,6 +9578,16 @@ func (ec *executionContext) marshalNUserGroup2ᚖETᚑSensorAPIᚋgraphᚋmodel�
 	return ec._UserGroup(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNWaterData2ETᚑSensorAPIᚋgraphᚋmodelᚐWaterData(ctx context.Context, sel ast.SelectionSet, v model.WaterData) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._WaterData(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNWaterUsage2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐWaterUsageᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.WaterUsage) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
@@ -7167,6 +9696,7 @@ func (ec *executionContext) unmarshalN__DirectiveLocation2string(ctx context.Con
 }
 
 func (ec *executionContext) marshalN__DirectiveLocation2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -7355,6 +9885,7 @@ func (ec *executionContext) unmarshalN__TypeKind2string(ctx context.Context, v a
 }
 
 func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
+	_ = sel
 	res := graphql.MarshalString(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
@@ -7370,6 +9901,8 @@ func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v any) (
 }
 
 func (ec *executionContext) marshalOBoolean2bool(ctx context.Context, sel ast.SelectionSet, v bool) graphql.Marshaler {
+	_ = sel
+	_ = ctx
 	res := graphql.MarshalBoolean(v)
 	return res
 }
@@ -7386,6 +9919,8 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	if v == nil {
 		return graphql.Null
 	}
+	_ = sel
+	_ = ctx
 	res := graphql.MarshalBoolean(*v)
 	return res
 }
@@ -7409,6 +9944,8 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 	if v == nil {
 		return graphql.Null
 	}
+	_ = sel
+	_ = ctx
 	res := graphql.MarshalString(*v)
 	return res
 }

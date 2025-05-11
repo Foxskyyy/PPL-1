@@ -6,6 +6,7 @@ import (
 	"ET-SensorAPI/config"
 	"ET-SensorAPI/graph/model"
 	"ET-SensorAPI/models"
+	"ET-SensorAPI/services"
 	"ET-SensorAPI/utils"
 	"context"
 	"encoding/json"
@@ -121,6 +122,10 @@ func (r *mutationResolver) AssignUserToGroup(ctx context.Context, senderEmail st
 	membership := models.UserGroupMember{UserID: user.ID, UserGroupID: group.ID}
 	if err := config.DB.Create(&membership).Error; err != nil {
 		return nil, errors.New("failed to assign user to group")
+	}
+
+	if err := utils.SendInvitationEmail(senderEmail, receiverEmail, group.Name); err != nil {
+		return nil, errors.New("failed to send invitation email")
 	}
 
 	successMessage := "User assigned to group successfully"
@@ -580,6 +585,90 @@ func (r *mutationResolver) Logout(ctx context.Context, email string) (*string, e
 	return &successMessage, nil
 }
 
+// AddLocation is the resolver for the addLocation field.
+func (r *mutationResolver) AddLocation(ctx context.Context, groupId int32, locationName string) (*string, error) {
+	var group models.UserGroup
+
+	tx := config.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Set("gorm:query_option", "FOR UPDATE").
+		Where("id = ?", groupId).
+		First(&group).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("group not found: %w", err)
+	}
+
+	updatedLocations := append(group.Location, locationName)
+
+	if err := tx.Model(&group).
+		Update("location", updatedLocations).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to update locations: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("transaction failed: %w", err)
+	}
+
+	successMessage := "Location added successfully"
+	return &successMessage, nil
+}
+
+// RemoveDevice is the resolver for the removeDevice field.
+func (r *mutationResolver) RemoveDevice(ctx context.Context, groupID int32, deviceID string) (*string, error) {
+	tx := config.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	var group models.UserGroup
+	if err := tx.First(&group, groupID).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("user group not found")
+	}
+
+	var device models.Device
+	if err := tx.Where("id = ? AND user_group_id = ?", deviceID, groupID).First(&device).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("device not found in specified group")
+	}
+
+	if err := tx.Where("device_id = ?", deviceID).Delete(&models.WaterUsage{}).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to delete device usage history: %w", err)
+	}
+
+	if err := tx.Delete(&device).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to delete device: %w", err)
+	}
+
+	if err := tx.Model(&group).Update("device_count", gorm.Expr("device_count - 1")).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to update group stats: %w", err)
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("transaction failed: %w", err)
+	}
+
+	successMessage := "Device removed successfully"
+	return &successMessage, nil
+}
+
+// CheckUsageNotifications is the resolver for the checkUsageNotifications field.
+func (r *mutationResolver) CheckUsageNotifications(ctx context.Context) (bool, error) {
+	go services.CheckUsageNotifications()
+	return true, nil
+}
+
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 	var users []models.User
@@ -647,6 +736,7 @@ func (r *queryResolver) UserGroups(ctx context.Context) ([]*model.UserGroup, err
 		result = append(result, &model.UserGroup{
 			ID:        strconv.Itoa(int(g.ID)),
 			Name:      g.Name,
+			Location:  g.Location,
 			CreatedAt: g.CreatedAt,
 			Devices:   devices,
 			Users:     users,
@@ -693,6 +783,47 @@ func (r *queryResolver) Devices(ctx context.Context) ([]*model.Device, error) {
 			},
 		})
 	}
+	return result, nil
+}
+
+// DeviceUsage is the resolver for the deviceUsage field.
+func (r *queryResolver) DeviceUsage(ctx context.Context, groupID int32) ([]*model.DeviceUsageData, error) {
+	var devices []models.Device
+	if err := config.DB.Preload("WaterUsages").Where("user_group_id = ?", groupID).Find(&devices).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch devices: %w", err)
+	}
+
+	deviceMap := make(map[string]*model.DeviceUsageData, len(devices))
+	groupTotal := float64(0)
+
+	for _, device := range devices {
+		deviceTotal := float64(0)
+
+		if device.WaterUsages != nil {
+			for _, usage := range device.WaterUsages {
+				deviceTotal += usage.TotalUsage
+			}
+		}
+
+		deviceMap[device.ID] = &model.DeviceUsageData{
+			ID:       device.ID,
+			Location: device.Location,
+			Usage:    deviceTotal,
+		}
+
+		groupTotal += deviceTotal
+	}
+
+	result := make([]*model.DeviceUsageData, 0, len(deviceMap))
+	for _, data := range deviceMap {
+		if groupTotal > 0 {
+			data.Usage = (data.Usage / groupTotal) * 100
+		} else {
+			data.Usage = 0.0
+		}
+		result = append(result, data)
+	}
+
 	return result, nil
 }
 
@@ -794,6 +925,27 @@ func (r *queryResolver) DeepSeekAnalysis(ctx context.Context, userID int32) (*mo
 	return &model.DeepSeekResponse{Analysis: &analysis}, nil
 }
 
+// Notifications is the resolver for the notifications field.
+func (r *queryResolver) Notifications(ctx context.Context) ([]*model.Notification, error) {
+	var dbNotifications []models.Notification
+	if err := config.DB.
+		Preload("Device").
+		Find(&dbNotifications).Error; err != nil {
+		return nil, err
+	}
+
+	var result []*model.Notification
+	for _, n := range dbNotifications {
+		result = append(result, &model.Notification{
+			ID:        fmt.Sprintf("%d", n.ID),
+			Message:   n.Message,
+			CreatedAt: n.CreatedAt,
+			Device:    convertToGQLDevice(n.Device),
+		})
+	}
+	return result, nil
+}
+
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
@@ -806,22 +958,18 @@ type queryResolver struct{ *Resolver }
 // !!! WARNING !!!
 // The code below was going to be deleted when updating resolvers. It has been copied here so you have
 // one last chance to move it out of harms way if you want. There are two reasons this happens:
-//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
-//    it when you're done.
-//  - You have helper methods in this file. Move them out to keep these resolver files clean.
+//   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//     it when you're done.
+//   - You have helper methods in this file. Move them out to keep these resolver files clean.
 
-func convertDeviceToGQL(d models.Device) *model.Device {
+func convertToGQLDevice(d models.Device) *model.Device {
 	return &model.Device{
-		ID:       d.ID,
-		Name:     d.Name,
-		Location: d.Location,
-		UserGroup: &model.UserGroup{
-			ID:        fmt.Sprintf("%d", d.UserGroupID),
-			Name:      d.UserGroup.Name,
-			CreatedAt: d.UserGroup.CreatedAt,
-			Location:  d.UserGroup.Location,
-		},
+		ID:        d.ID,
+		Name:      d.Name,
+		Location:  d.Location,
+		CreatedAt: d.CreatedAt,
 	}
+
 }
 
 func convertToGQLWaterUsage(wu models.WaterUsage) *model.WaterUsage {
@@ -841,7 +989,6 @@ func convertToGQLWaterUsage(wu models.WaterUsage) *model.WaterUsage {
 		},
 	}
 }
-
 func processWeeklyData(data []*model.WaterUsage) []*model.DailyData {
 	dailyMap := make(map[string]*model.DailyData)
 
@@ -870,7 +1017,6 @@ func processWeeklyData(data []*model.WaterUsage) []*model.DailyData {
 
 	return result
 }
-
 func processMonthlyData(data []*model.WaterUsage) *model.MonthlyData {
 	monthly := &model.MonthlyData{
 		Month: data[0].RecordedAt.Format("January 2006"),
@@ -899,7 +1045,6 @@ func processMonthlyData(data []*model.WaterUsage) *model.MonthlyData {
 
 	return monthly
 }
-
 func processYearlyData(data []*model.WaterUsage) *model.YearlyData {
 	yearly := &model.YearlyData{
 		Year: data[0].RecordedAt.Format("2006"),
@@ -929,6 +1074,7 @@ func processYearlyData(data []*model.WaterUsage) *model.YearlyData {
 		}
 		day.Hourly = append(day.Hourly, entry)
 		day.TotalUsage += entry.TotalUsage
+		day.AvgFlow = calculateAverageFlow(day.Hourly)
 		month.TotalUsage += entry.TotalUsage
 		yearly.TotalUsage += entry.TotalUsage
 	}
@@ -943,7 +1089,6 @@ func processYearlyData(data []*model.WaterUsage) *model.YearlyData {
 
 	return yearly
 }
-
 func calculateAverageFlow(entries []*model.WaterUsage) float64 {
 	total := 0.0
 	for _, entry := range entries {
@@ -954,7 +1099,6 @@ func calculateAverageFlow(entries []*model.WaterUsage) float64 {
 	}
 	return total / float64(len(entries))
 }
-
 func calculateAverageFlowForMonth(days []*model.DailyData) float64 {
 	total := 0.0
 	count := 0

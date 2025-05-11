@@ -1,6 +1,8 @@
 package models
 
 import (
+	"database/sql/driver"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -21,10 +23,11 @@ type User struct {
 }
 
 type UserGroup struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	Name      string    `json:"name" gorm:"unique"`
-	CreatedAt time.Time `json:"created_at"`
-	Devices   []Device  `json:"devices"`
+	ID        uint   `gorm:"primaryKey"`
+	Name      string `gorm:"unique"`
+	CreatedAt time.Time
+	Devices   []Device  `gorm:"foreignKey:UserGroupID"`
+	Location  JSONArray `gorm:"type:jsonb"`
 }
 
 type UserGroupMember struct {
@@ -43,20 +46,59 @@ func (ugm *UserGroupMember) BeforeCreate(tx *gorm.DB) error {
 }
 
 type Device struct {
-	ID          string       `json:"id" gorm:"primaryKey"`
-	UserGroupID uint         `json:"user_group_id"`
-	UserGroup   UserGroup    `json:"-" gorm:"constraint:OnDelete:CASCADE;"`
-	Name        string       `json:"name"`
-	Location    string       `json:"location"`
-	CreatedAt   time.Time    `json:"created_at"`
-	WaterUsages []WaterUsage `json:"water_usages"`
+	ID          string    `gorm:"primaryKey"`
+	UserGroupID uint      `gorm:"index"`
+	UserGroup   UserGroup `gorm:"constraint:OnDelete:CASCADE;"`
+	Name        string
+	Location    string
+	CreatedAt   time.Time
+	WaterUsages []WaterUsage `gorm:"foreignKey:DeviceID"`
 }
 
 type WaterUsage struct {
-	ID         uint      `json:"id" gorm:"primaryKey"`
-	DeviceID   string    `json:"device_id"`
-	Device     Device    `json:"-" gorm:"constraint:OnDelete:CASCADE;foreignKey:DeviceID;references:ID"`
-	FlowRate   float64   `json:"flow_rate"`
-	TotalUsage float64   `json:"total_usage"`
-	RecordedAt time.Time `json:"recorded_at" gorm:"type:timestamp"`
+	ID         uint   `gorm:"primaryKey"`
+	DeviceID   string `gorm:"index"`
+	Device     Device `gorm:"constraint:OnDelete:CASCADE;"`
+	FlowRate   float64
+	TotalUsage float64
+	RecordedAt time.Time `gorm:"index"`
+}
+
+type Notification struct {
+	ID        uint   `gorm:"primaryKey"`
+	DeviceID  string `gorm:"index"`
+	Device    Device `gorm:"foreignKey:DeviceID;references:ID"`
+	Message   string
+	Threshold float64
+	CreatedAt time.Time
+}
+
+type DailyUsage struct {
+	ID         uint      `gorm:"primaryKey"`
+	DeviceID   string    `gorm:"index"`
+	Date       time.Time `gorm:"type:date"`
+	TotalUsage float64
+	Notified   bool `gorm:"default:false"`
+}
+
+type JSONArray []string
+
+func (j *JSONArray) Scan(value interface{}) error {
+	if value == nil {
+		*j = JSONArray{}
+		return nil
+	}
+
+	bytes, ok := value.([]byte)
+	if !ok {
+		return fmt.Errorf("invalid type assertion")
+	}
+	return json.Unmarshal(bytes, j)
+}
+
+func (j JSONArray) Value() (driver.Value, error) {
+	if j == nil {
+		return "[]", nil
+	}
+	return json.Marshal(j)
 }

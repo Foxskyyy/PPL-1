@@ -4,14 +4,27 @@ import (
 	"ET-SensorAPI/config"
 	"ET-SensorAPI/models"
 	"ET-SensorAPI/routes"
+	"ET-SensorAPI/services"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
+
+func startCronJobs() {
+	ticker := time.NewTicker(24 * time.Hour)
+	go func() {
+		for range ticker.C {
+			services.CheckUsageNotifications()
+		}
+	}()
+
+	services.CheckUsageNotifications()
+}
 
 func main() {
 
@@ -36,6 +49,7 @@ func main() {
 
 	dir, _ := os.Getwd()
 	fmt.Println("Running from:", dir)
+	startCronJobs()
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
