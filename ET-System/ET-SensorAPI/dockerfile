@@ -1,0 +1,33 @@
+# Stage 1: Build
+FROM golang:1.24-alpine AS builder
+
+WORKDIR /app
+
+# Copy all required files first
+COPY go.mod go.sum ./
+COPY .env .
+COPY . .
+
+# Verify files are copied
+RUN ls -la && \
+    [ -f .env ] || (echo "Missing required files!" && exit 1)
+
+RUN go mod download
+RUN go build -o server main.go
+
+# Stage 2: Run
+FROM alpine:latest
+
+WORKDIR /app
+
+# Copy required files with verification
+COPY --from=builder /app/server .
+COPY --from=builder /app/.env .
+
+# Verify runtime files
+RUN ls -la && \
+    [ -f .env ] || (echo "Missing files in final image!" && exit 1)
+
+EXPOSE 7040
+
+CMD ["./server"]

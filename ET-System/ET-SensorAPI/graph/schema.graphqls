@@ -1,0 +1,130 @@
+scalar Time
+
+type User {
+  id: ID!
+  email: String!
+  displayName: String
+  verified: Boolean!
+  createdAt: Time!
+  groups: [UserGroup!]!
+}
+
+type UserGroup {
+  id: ID!
+  name: String!
+  createdAt: Time!
+  devices: [Device!]!
+  users: [User!]!
+  location: [String!]!
+}
+
+type Device {
+  id: ID!
+  userGroup: UserGroup!
+  name: String!
+  location: String!
+  createdAt: Time!
+  waterUsages: [WaterUsage!]!
+}
+
+type WaterUsage {
+  id: ID!
+  device: Device!
+  flowRate: Float!
+  totalUsage: Float!
+  recordedAt: Time!
+}
+
+type DeepSeekResponse {
+  analysis: String
+}
+
+type AuthPayload {
+  user: User!
+  token: String!
+}
+
+type WaterUsageComparison {
+  currentMonth: MonthlyWaterUsage!
+  previousMonth: MonthlyWaterUsage!
+}
+
+type MonthlyWaterUsage {
+  totalUsage: Float!
+  usages: [WaterUsage!]!
+}
+
+union WaterData = WaterUsageList | DailyDataList | MonthlyData | YearlyData
+
+type WaterUsageList {
+  data: [WaterUsage!]!
+}
+
+type DailyDataList {
+  data: [DailyData!]!
+}
+
+type DailyData {
+  date: String!
+  hourly: [WaterUsage!]!
+  totalUsage: Float!
+  avgFlow: Float!
+}
+
+type MonthlyData {
+  month: String!
+  days: [DailyData!]!
+  totalUsage: Float!
+  avgFlow: Float!
+}
+
+type YearlyData {
+  year: String!
+  months: [MonthlyData!]!
+  totalUsage: Float!
+  avgFlow: Float!
+}
+
+type DeviceUsageData{
+  id: ID!
+  Location: String!
+  Usage: Float!
+}
+
+type Notification {
+  id: ID!
+  device: Device!
+  message: String!
+  createdAt: Time!
+}
+
+enum OAuthProvider { GOOGLE APPLE }
+
+type Query {
+  users: [User!]!
+  userGroups: [UserGroup!]!
+  devices: [Device!]!
+  deviceUsage(groupId: Int!): [DeviceUsageData!]!
+  waterUsages: [WaterUsage!]!
+  waterUsagesData(deviceId: String!, timeFilter: String!): WaterData!
+  deepSeekAnalysis(userID: Int!): DeepSeekResponse
+  notifications: [Notification!]!
+}
+
+type Mutation {
+  login(email: String!, password: String!): AuthPayload!
+  register(displayName: String!, email: String!, password: String!): String
+  assignUserToGroup(senderEmail: String!, userGroupID: Int!, receiverEmail: String!): String
+  verifyEmail(email: String!, token: String!): String
+  ResendVerificationEmail(email: String!): String
+  RequestForgotPassword(email: String!): String
+  ForgotPasswordHandler(email: String!, password: String!): String
+  changeEmail(email: String!, password: String!, newemail: String!): String
+  createUserGroup(userID: Int!, groupName: String!): UserGroup!
+  addDeviceToUserGroup(deviceId: String!, deviceName: String!, userGroupID: Int!, location: String!): UserGroup!
+  oauthLogin(provider: OAuthProvider!, token: String!): AuthPayload!
+  logout(email: String!): String
+  addLocation(groupId: Int!, locationName: String!): String
+  removeDevice(groupId: Int!, deviceId: String!): String
+  checkUsageNotifications: Boolean!
+}
