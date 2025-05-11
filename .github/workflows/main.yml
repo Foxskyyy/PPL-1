@@ -1,0 +1,42 @@
+name: Build and Push Docker Images to Friend's GHCR
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CONTAINER_OWNER: "Foxskyyy"
+  API_PATH: "ET-System/ET-SensorAPI/"
+  IMAGE_PREFIX: "api"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ env.CONTAINER_OWNER }} --password-stdin
+
+      - name: Build and Push Image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          # Convert names to lowercase
+          LOWER_OWNER=$(echo "${{ env.CONTAINER_OWNER }}" | tr '[:upper:]' '[:lower:]')
+          FOLDER_NAME=$(basename "${{ env.API_PATH }}")
+          FOLDER_LOWER=$(echo "$FOLDER_NAME" | tr '[:upper:]' '[:lower:]')
+
+          # Tag with both latest and Git SHA
+          IMAGE_LATEST="ghcr.io/$LOWER_OWNER/${{ env.IMAGE_PREFIX }}-$FOLDER_LOWER:latest"
+          IMAGE_SHA="ghcr.io/$LOWER_OWNER/${{ env.IMAGE_PREFIX }}-$FOLDER_LOWER:${GITHUB_SHA:0:7}"
+
+          # Build and push
+          docker build -t $IMAGE_LATEST -t $IMAGE_SHA "${{ env.API_PATH }}"
+          docker push $IMAGE_LATEST
+          docker push $IMAGE_SHA
