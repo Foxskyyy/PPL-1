@@ -708,13 +708,15 @@ func (r *mutationResolver) EditMember(ctx context.Context, groupID int32, change
 
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
-	var users []models.User
-	if err := config.DB.Preload("Memberships.UserGroup").Find(&users).Error; err != nil {
+	var dbUsers []models.User
+	if err := config.DB.WithContext(ctx).
+		Preload("Memberships.UserGroup").
+		Find(&dbUsers).Error; err != nil {
 		return nil, fmt.Errorf("failed to fetch users: %w", err)
 	}
 
-	result := make([]*model.User, len(users))
-	for i, u := range users {
+	result := make([]*model.User, len(dbUsers))
+	for i, u := range dbUsers {
 		memberships := make([]*model.UserGroupMember, len(u.Memberships))
 		for j, m := range u.Memberships {
 			memberships[j] = &model.UserGroupMember{
@@ -722,14 +724,9 @@ func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 					ID:        fmt.Sprintf("%d", m.UserGroup.ID),
 					Name:      m.UserGroup.Name,
 					CreatedAt: m.UserGroup.CreatedAt,
-					Location:  m.UserGroup.Location, // Assuming it's []string-compatible
+					Location:  m.UserGroup.Location,
 				},
-				User: &model.User{
-					ID: fmt.Sprintf("%d", u.ID),
-				},
-				User: &model.User{
-					ID: fmt.Sprintf("%d", u.ID),
-				},
+				User:      &model.User{ID: fmt.Sprintf("%d", u.ID)},
 				IsAdmin:   m.IsAdmin,
 				CreatedAt: m.CreatedAt,
 			}
