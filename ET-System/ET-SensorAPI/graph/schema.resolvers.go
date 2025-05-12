@@ -285,7 +285,7 @@ func (r *mutationResolver) CreateUserGroup(ctx context.Context, userID int32, gr
 	}
 
 	var members []models.UserGroupMember
-	if err := tx.Preload("User").Preload("Group").
+	if err := tx.Preload("User").Preload("UserGroup").
 		Where("user_group_id = ?", group.ID).
 		Find(&members).Error; err != nil {
 		return nil, fmt.Errorf("failed to load group members: %w", err)
@@ -723,6 +723,9 @@ func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 					Name:      m.UserGroup.Name,
 					CreatedAt: m.UserGroup.CreatedAt,
 					Location:  m.UserGroup.Location, // Assuming it's []string-compatible
+				},
+				User: &model.User{
+					ID: fmt.Sprintf("%d", u.ID),
 				},
 				User: &model.User{
 					ID: fmt.Sprintf("%d", u.ID),
