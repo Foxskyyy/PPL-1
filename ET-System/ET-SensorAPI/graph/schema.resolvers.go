@@ -101,57 +101,57 @@ func (r *mutationResolver) Register(ctx context.Context, displayName string, ema
 
 // AssignUserToGroup is the resolver for the assignUserToGroup field.
 func (r *mutationResolver) AssignUserToGroup(ctx context.Context, senderEmail string, userGroupID int32, receiverEmail string) (*string, error) {
-	
-    tx := config.DB.Begin()
-    if tx.Error != nil {
-        return nil, fmt.Errorf("failed to start transaction: %w", tx.Error)
-    }
 
-    var user models.User
-    if err := tx.Where("email = ?", receiverEmail).First(&user).Error; err != nil {
-        tx.Rollback()
-        return nil, fmt.Errorf("user not found: %w", err)
-    }
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return nil, fmt.Errorf("failed to start transaction: %w", tx.Error)
+	}
 
-    var group models.UserGroup
-    if err := tx.First(&group, userGroupID).Error; err != nil {
-        tx.Rollback()
-        return nil, fmt.Errorf("group not found: %w", err)
-    }
+	var user models.User
+	if err := tx.Where("email = ?", receiverEmail).First(&user).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
 
-    var count int64
-    if err := tx.Model(&models.UserGroupMember{}).
-        Where("user_group_id = ?", group.ID).
-        Count(&count).Error; err != nil {
-        tx.Rollback()
-        return nil, fmt.Errorf("failed to check member count: %w", err)
-    }
-    if count >= 4 {
-        tx.Rollback()
-        return nil, errors.New("user group cannot have more than 4 users")
-    }
+	var group models.UserGroup
+	if err := tx.First(&group, userGroupID).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("group not found: %w", err)
+	}
 
-    membership := models.UserGroupMember{
-        UserID:      user.ID,
-        UserGroupID: group.ID,
-        IsAdmin:     false,
-    }
-    if err := tx.Create(&membership).Error; err != nil {
-        tx.Rollback()
-        return nil, fmt.Errorf("failed to assign user to group: %w", err)
-    }
+	var count int64
+	if err := tx.Model(&models.UserGroupMember{}).
+		Where("user_group_id = ?", group.ID).
+		Count(&count).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to check member count: %w", err)
+	}
+	if count >= 4 {
+		tx.Rollback()
+		return nil, errors.New("user group cannot have more than 4 users")
+	}
 
-    if err := utils.SendInvitationEmail(senderEmail, receiverEmail, group.Name); err != nil {
-        tx.Rollback()
-        return nil, fmt.Errorf("failed to send invitation email: %w", err)
-    }
+	membership := models.UserGroupMember{
+		UserID:      user.ID,
+		UserGroupID: group.ID,
+		IsAdmin:     false,
+	}
+	if err := tx.Create(&membership).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to assign user to group: %w", err)
+	}
 
-    if err := tx.Commit().Error; err != nil {
-        return nil, fmt.Errorf("failed to commit transaction: %w", err)
-    }
+	if err := utils.SendInvitationEmail(senderEmail, receiverEmail, group.Name); err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to send invitation email: %w", err)
+	}
 
-    successMessage := "User assigned to group successfully"
-    return &successMessage, nil
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	successMessage := "User assigned to group successfully"
+	return &successMessage, nil
 }
 
 // VerifyEmail is the resolver for the verifyEmail field.
@@ -287,74 +287,74 @@ func (r *mutationResolver) ChangeEmail(ctx context.Context, email string, passwo
 
 // CreateUserGroup is the resolver for the createUserGroup field.
 func (r *mutationResolver) CreateUserGroup(ctx context.Context, userID int32, groupName string) (*model.UserGroup, error) {
-    tx := config.DB.Begin()
-    if tx.Error != nil {
-        return nil, tx.Error
-    }
-    defer func() {
-        if r := recover(); r != nil {
-            tx.Rollback()
-        }
-    }()
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		return nil, tx.Error
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
 
-    group := models.UserGroup{Name: groupName}
-    if err := tx.Create(&group).Error; err != nil {
-        tx.Rollback()
-        return nil, fmt.Errorf("failed to create group: %w", err)
-    }
+	group := models.UserGroup{Name: groupName}
+	if err := tx.Create(&group).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to create group: %w", err)
+	}
 
-    member := models.UserGroupMember{
-        UserID:      uint(userID),
-        UserGroupID: group.ID,
-        IsAdmin:     true,
-    }
-    if err := tx.Create(&member).Error; err != nil {
-        tx.Rollback()
-        return nil, fmt.Errorf("failed to add creator to group: %w", err)
-    }
+	member := models.UserGroupMember{
+		UserID:      uint(userID),
+		UserGroupID: group.ID,
+		IsAdmin:     true,
+	}
+	if err := tx.Create(&member).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to add creator to group: %w", err)
+	}
 
-    var members []models.UserGroupMember
-    if err := tx.Preload("User").Preload("UserGroup").
-        Where("user_group_id = ?", group.ID).
-        Find(&members).Error; err != nil {
-        tx.Rollback()
-        return nil, fmt.Errorf("failed to load group members: %w", err)
-    }
+	var members []models.UserGroupMember
+	if err := tx.Preload("User").Preload("UserGroup").
+		Where("user_group_id = ?", group.ID).
+		Find(&members).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("failed to load group members: %w", err)
+	}
 
-    if err := tx.Commit().Error; err != nil {
-        return nil, fmt.Errorf("failed to commit transaction: %w", err)
-    }
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
 
-    users := make([]*model.UserGroupMember, len(members))
-    for i, m := range members {
-        users[i] = &model.UserGroupMember{
-            User: &model.User{
-                ID:          fmt.Sprintf("%d", m.User.ID),
-                Email:       m.User.Email,
-                DisplayName: &m.User.DisplayName,
-                Verified:    m.User.Verified,
-                CreatedAt:   m.User.CreatedAt,
-                Memberships: []*model.UserGroupMember{},
-            },
-            Group: &model.UserGroup{
-                ID:        fmt.Sprintf("%d", m.UserGroup.ID),
-                Name:      m.UserGroup.Name,
-                CreatedAt: m.UserGroup.CreatedAt,
-                Location:  m.UserGroup.Location,
-            },
-            IsAdmin:   m.IsAdmin,
-            CreatedAt: m.CreatedAt,
-        }
-    }
+	users := make([]*model.UserGroupMember, len(members))
+	for i, m := range members {
+		users[i] = &model.UserGroupMember{
+			User: &model.User{
+				ID:          fmt.Sprintf("%d", m.User.ID),
+				Email:       m.User.Email,
+				DisplayName: &m.User.DisplayName,
+				Verified:    m.User.Verified,
+				CreatedAt:   m.User.CreatedAt,
+				Memberships: []*model.UserGroupMember{},
+			},
+			Group: &model.UserGroup{
+				ID:        fmt.Sprintf("%d", m.UserGroup.ID),
+				Name:      m.UserGroup.Name,
+				CreatedAt: m.UserGroup.CreatedAt,
+				Location:  m.UserGroup.Location,
+			},
+			IsAdmin:   m.IsAdmin,
+			CreatedAt: m.CreatedAt,
+		}
+	}
 
-    return &model.UserGroup{
-        ID:        fmt.Sprintf("%d", group.ID),
-        Name:      group.Name,
-        CreatedAt: group.CreatedAt,
-        Location:  group.Location,
-        Users:     users,
-        Devices:   []*model.Device{},
-    }, nil
+	return &model.UserGroup{
+		ID:        fmt.Sprintf("%d", group.ID),
+		Name:      group.Name,
+		CreatedAt: group.CreatedAt,
+		Location:  group.Location,
+		Users:     users,
+		Devices:   []*model.Device{},
+	}, nil
 }
 
 // AddDeviceToUserGroup is the resolver for the addDeviceToUserGroup field.
@@ -785,54 +785,74 @@ func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 
 // UserGroups is the resolver for the userGroups field.
 func (r *queryResolver) UserGroups(ctx context.Context) ([]*model.UserGroup, error) {
-	var groups []models.UserGroup
-	if err := config.DB.Preload("Devices").Preload("Members.User").Find(&groups).Error; err != nil {
+	var dbGroups []models.UserGroup
+
+	// Optimized preloading with all necessary relationships
+	err := config.DB.
+		Preload("Members.User").
+		Preload("Devices.WaterUsages"). // Load devices with their water usages
+		Find(&dbGroups).Error
+
+	if err != nil {
 		return nil, fmt.Errorf("failed to fetch groups: %w", err)
 	}
 
-	result := make([]*model.UserGroup, len(groups))
-	for i, g := range groups {
-		members := make([]*model.UserGroupMember, len(g.Members))
-		for j, m := range g.Members {
+	result := make([]*model.UserGroup, len(dbGroups))
+
+	for i, dbGroup := range dbGroups {
+		// Convert members
+		members := make([]*model.UserGroupMember, len(dbGroup.Members))
+		for j, g := range dbGroup.Members {
 			members[j] = &model.UserGroupMember{
 				User: &model.User{
-					ID:          fmt.Sprintf("%d", m.User.ID),
-					Email:       m.User.Email,
-					DisplayName: &m.User.DisplayName,
-					Verified:    m.User.Verified,
-					CreatedAt:   m.User.CreatedAt,
-					Memberships: []*model.UserGroupMember{}, // Populated by resolver if needed
+					ID:          fmt.Sprintf("%d", g.User.ID),
+					Email:       g.User.Email,
+					DisplayName: &g.User.DisplayName,
+					Verified:    g.User.Verified,
+					CreatedAt:   g.User.CreatedAt,
 				},
 				Group: &model.UserGroup{
-					ID:        fmt.Sprintf("%d", g.ID),
-					Name:      g.Name,
-					CreatedAt: g.CreatedAt,
-					Location:  g.Location,
+					ID:        fmt.Sprintf("%d", g.UserGroup.ID),
+					Name:      g.UserGroup.Name,
+					CreatedAt: g.UserGroup.CreatedAt,
+					Location:  g.UserGroup.Location,
 				},
-				IsAdmin:   m.IsAdmin,
-				CreatedAt: m.CreatedAt,
+				IsAdmin:   g.IsAdmin,
+				CreatedAt: g.CreatedAt,
 			}
 		}
 
-		devices := make([]*model.Device, len(g.Devices))
-		for k, d := range g.Devices {
+		devices := make([]*model.Device, len(dbGroup.Devices))
+		for k, h := range dbGroup.Devices {
+			waterUsages := make([]*model.WaterUsage, len(h.WaterUsages))
+			for l, dbUsage := range h.WaterUsages {
+				waterUsages[l] = &model.WaterUsage{
+					ID:         fmt.Sprintf("%d", dbUsage.ID),
+					FlowRate:   dbUsage.FlowRate,
+					TotalUsage: dbUsage.TotalUsage,
+					RecordedAt: dbUsage.RecordedAt,
+				}
+			}
+
 			devices[k] = &model.Device{
-				ID:        d.ID,
-				Name:      d.Name,
-				Location:  d.Location,
-				CreatedAt: d.CreatedAt,
+				ID:          h.ID,
+				Name:        h.Name,
+				Location:    h.Location,
+				CreatedAt:   h.CreatedAt,
+				WaterUsages: waterUsages,
 			}
 		}
 
 		result[i] = &model.UserGroup{
-			ID:        fmt.Sprintf("%d", g.ID),
-			Name:      g.Name,
-			CreatedAt: g.CreatedAt,
-			Location:  g.Location,
+			ID:        fmt.Sprintf("%d", dbGroup.ID),
+			Name:      dbGroup.Name,
+			CreatedAt: dbGroup.CreatedAt,
+			Location:  dbGroup.Location,
 			Users:     members,
 			Devices:   devices,
 		}
 	}
+
 	return result, nil
 }
 

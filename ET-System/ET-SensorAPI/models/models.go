@@ -61,12 +61,12 @@ type Device struct {
 }
 
 type WaterUsage struct {
-	ID         uint   `gorm:"primaryKey"`
-	DeviceID   string `gorm:"index"`
-	Device     Device `gorm:"constraint:OnDelete:CASCADE;"`
-	FlowRate   float64
-	TotalUsage float64
-	RecordedAt time.Time `gorm:"index"`
+	ID         uint      `gorm:"primaryKey"`
+	DeviceID   string    `gorm:"index" json:"device_id"`
+	Device     Device    `gorm:"constraint:OnDelete:CASCADE;"`
+	FlowRate   float64   `json:"flow_rate"`
+	TotalUsage float64   `json:"total_usage"`
+	RecordedAt time.Time `gorm:"index" json:"recorded_at"`
 }
 
 type Notification struct {
