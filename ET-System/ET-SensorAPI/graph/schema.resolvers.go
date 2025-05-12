@@ -263,64 +263,74 @@ func (r *mutationResolver) ChangeEmail(ctx context.Context, email string, passwo
 
 // CreateUserGroup is the resolver for the createUserGroup field.
 func (r *mutationResolver) CreateUserGroup(ctx context.Context, userID int32, groupName string) (*model.UserGroup, error) {
-	tx := config.DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+    tx := config.DB.Begin()
+    if tx.Error != nil {
+        return nil, tx.Error
+    }
+    defer func() {
+        if r := recover(); r != nil {
+            tx.Rollback()
+        }
+    }()
 
-	group := models.UserGroup{Name: groupName}
-	if err := tx.Create(&group).Error; err != nil {
-		return nil, fmt.Errorf("failed to create group: %w", err)
-	}
+    group := models.UserGroup{Name: groupName}
+    if err := tx.Create(&group).Error; err != nil {
+        tx.Rollback()
+        return nil, fmt.Errorf("failed to create group: %w", err)
+    }
 
-	member := models.UserGroupMember{
-		UserID:      uint(userID),
-		UserGroupID: group.ID,
-		IsAdmin:     true,
-	}
-	if err := tx.Create(&member).Error; err != nil {
-		return nil, fmt.Errorf("failed to add creator to group: %w", err)
-	}
+    member := models.UserGroupMember{
+        UserID:      uint(userID),
+        UserGroupID: group.ID,
+        IsAdmin:     true,
+    }
+    if err := tx.Create(&member).Error; err != nil {
+        tx.Rollback()
+        return nil, fmt.Errorf("failed to add creator to group: %w", err)
+    }
 
-	var members []models.UserGroupMember
-	if err := tx.Preload("User").Preload("UserGroup").
-		Where("user_group_id = ?", group.ID).
-		Find(&members).Error; err != nil {
-		return nil, fmt.Errorf("failed to load group members: %w", err)
-	}
+    var members []models.UserGroupMember
+    if err := tx.Preload("User").Preload("UserGroup").
+        Where("user_group_id = ?", group.ID).
+        Find(&members).Error; err != nil {
+        tx.Rollback()
+        return nil, fmt.Errorf("failed to load group members: %w", err)
+    }
 
-	users := make([]*model.UserGroupMember, len(members))
-	for i, m := range members {
-		users[i] = &model.UserGroupMember{
-			User: &model.User{
-				ID:          fmt.Sprintf("%d", m.User.ID),
-				Email:       m.User.Email,
-				DisplayName: &m.User.DisplayName,
-				Verified:    m.User.Verified,
-				CreatedAt:   m.User.CreatedAt,
-				Memberships: []*model.UserGroupMember{},
-			},
-			Group: &model.UserGroup{
-				ID:        fmt.Sprintf("%d", m.UserGroup.ID),
-				Name:      m.UserGroup.Name,
-				CreatedAt: m.UserGroup.CreatedAt,
-				Location:  m.UserGroup.Location,
-			},
-			IsAdmin:   m.IsAdmin,
-			CreatedAt: m.CreatedAt,
-		}
-	}
+    if err := tx.Commit().Error; err != nil {
+        return nil, fmt.Errorf("failed to commit transaction: %w", err)
+    }
 
-	return &model.UserGroup{
-		ID:        fmt.Sprintf("%d", group.ID),
-		Name:      group.Name,
-		CreatedAt: group.CreatedAt,
-		Location:  group.Location,
-		Users:     users,
-		Devices:   []*model.Device{},
-	}, nil
+    users := make([]*model.UserGroupMember, len(members))
+    for i, m := range members {
+        users[i] = &model.UserGroupMember{
+            User: &model.User{
+                ID:          fmt.Sprintf("%d", m.User.ID),
+                Email:       m.User.Email,
+                DisplayName: &m.User.DisplayName,
+                Verified:    m.User.Verified,
+                CreatedAt:   m.User.CreatedAt,
+                Memberships: []*model.UserGroupMember{},
+            },
+            Group: &model.UserGroup{
+                ID:        fmt.Sprintf("%d", m.UserGroup.ID),
+                Name:      m.UserGroup.Name,
+                CreatedAt: m.UserGroup.CreatedAt,
+                Location:  m.UserGroup.Location,
+            },
+            IsAdmin:   m.IsAdmin,
+            CreatedAt: m.CreatedAt,
+        }
+    }
+
+    return &model.UserGroup{
+        ID:        fmt.Sprintf("%d", group.ID),
+        Name:      group.Name,
+        CreatedAt: group.CreatedAt,
+        Location:  group.Location,
+        Users:     users,
+        Devices:   []*model.Device{},
+    }, nil
 }
 
 // AddDeviceToUserGroup is the resolver for the addDeviceToUserGroup field.
