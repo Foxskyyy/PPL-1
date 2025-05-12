@@ -15,6 +15,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"ET-SensorAPI/config"
+	"ET-SensorAPI/graph/model"
 	"ET-SensorAPI/models"
 )
 
@@ -219,4 +220,69 @@ func SendVerificationEmail(email, token string) error {
 
 	fmt.Println("Verification Email Sent!")
 	return nil
+}
+
+func ConvertToGQLUser(u models.User) *model.User {
+	// Always return empty slice for nested memberships to prevent infinite loops
+	return &model.User{
+		ID:          fmt.Sprintf("%d", u.ID),
+		Email:       u.Email,
+		DisplayName: &u.DisplayName,
+		Verified:    u.Verified,
+		CreatedAt:   u.CreatedAt,
+		Memberships: []*model.UserGroupMember{}, // Explicit empty array
+	}
+}
+
+// For the main authenticated user (with memberships)
+func ConvertAuthedUserToGQL(u models.User, memberships []models.UserGroupMember) *model.User {
+	gqlUser := ConvertToGQLUser(u)
+	gqlUser.Memberships = ConvertMembershipsToGQL(memberships)
+	return gqlUser
+}
+
+// Dedicated membership Converter
+func ConvertMembershipsToGQL(memberships []models.UserGroupMember) []*model.UserGroupMember {
+	result := make([]*model.UserGroupMember, len(memberships))
+	for i, m := range memberships {
+		result[i] = &model.UserGroupMember{
+			User:      ConvertToGQLUser(m.User), // Uses basic Converter
+			Group:     ConvertToGQLGroup(m.UserGroup),
+			IsAdmin:   m.IsAdmin,
+			CreatedAt: m.CreatedAt,
+		}
+	}
+	return result
+}
+
+func ConvertUserToGQL(user *models.User, memberships []models.UserGroupMember) *model.User {
+	gqlMemberships := make([]*model.UserGroupMember, len(memberships))
+
+	for i, m := range memberships {
+		gqlMemberships[i] = &model.UserGroupMember{
+			User:      ConvertToGQLUser(m.User),
+			Group:     ConvertToGQLGroup(m.UserGroup),
+			IsAdmin:   m.IsAdmin,
+			CreatedAt: m.CreatedAt,
+		}
+	}
+
+	return &model.User{
+		ID:          fmt.Sprintf("%d", user.ID),
+		Email:       user.Email,
+		DisplayName: &user.DisplayName,
+		Verified:    user.Verified,
+		CreatedAt:   user.CreatedAt,
+		Memberships: gqlMemberships,
+	}
+}
+
+// Additional conversion helpers
+func ConvertToGQLGroup(g models.UserGroup) *model.UserGroup {
+	return &model.UserGroup{
+		ID:        fmt.Sprintf("%d", g.ID),
+		Name:      g.Name,
+		CreatedAt: g.CreatedAt,
+		Location:  g.Location,
+	}
 }

@@ -102,6 +102,7 @@ type ComplexityRoot struct {
 		ChangeEmail             func(childComplexity int, email string, password string, newemail string) int
 		CheckUsageNotifications func(childComplexity int) int
 		CreateUserGroup         func(childComplexity int, userID int32, groupName string) int
+		EditMember              func(childComplexity int, groupID int32, changedUserID int32, action string) int
 		ForgotPasswordHandler   func(childComplexity int, email string, password string) int
 		Login                   func(childComplexity int, email string, password string) int
 		Logout                  func(childComplexity int, email string) int
@@ -124,6 +125,7 @@ type ComplexityRoot struct {
 		DeepSeekAnalysis func(childComplexity int, userID int32) int
 		DeviceUsage      func(childComplexity int, groupID int32) int
 		Devices          func(childComplexity int) int
+		GroupAiAnalysis  func(childComplexity int, groupID int32) int
 		Notifications    func(childComplexity int) int
 		UserGroups       func(childComplexity int) int
 		Users            func(childComplexity int) int
@@ -135,8 +137,8 @@ type ComplexityRoot struct {
 		CreatedAt   func(childComplexity int) int
 		DisplayName func(childComplexity int) int
 		Email       func(childComplexity int) int
-		Groups      func(childComplexity int) int
 		ID          func(childComplexity int) int
+		Memberships func(childComplexity int) int
 		Verified    func(childComplexity int) int
 	}
 
@@ -147,6 +149,13 @@ type ComplexityRoot struct {
 		Location  func(childComplexity int) int
 		Name      func(childComplexity int) int
 		Users     func(childComplexity int) int
+	}
+
+	UserGroupMember struct {
+		CreatedAt func(childComplexity int) int
+		Group     func(childComplexity int) int
+		IsAdmin   func(childComplexity int) int
+		User      func(childComplexity int) int
 	}
 
 	WaterUsage struct {
@@ -190,6 +199,7 @@ type MutationResolver interface {
 	AddLocation(ctx context.Context, groupID int32, locationName string) (*string, error)
 	RemoveDevice(ctx context.Context, groupID int32, deviceID string) (*string, error)
 	CheckUsageNotifications(ctx context.Context) (bool, error)
+	EditMember(ctx context.Context, groupID int32, changedUserID int32, action string) (*string, error)
 }
 type QueryResolver interface {
 	Users(ctx context.Context) ([]*model.User, error)
@@ -199,6 +209,7 @@ type QueryResolver interface {
 	WaterUsages(ctx context.Context) ([]*model.WaterUsage, error)
 	WaterUsagesData(ctx context.Context, deviceID string, timeFilter string) (model.WaterData, error)
 	DeepSeekAnalysis(ctx context.Context, userID int32) (*model.DeepSeekResponse, error)
+	GroupAiAnalysis(ctx context.Context, groupID int32) (*model.DeepSeekResponse, error)
 	Notifications(ctx context.Context) ([]*model.Notification, error)
 }
 
@@ -449,6 +460,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Mutation.CreateUserGroup(childComplexity, args["userID"].(int32), args["groupName"].(string)), true
 
+	case "Mutation.editMember":
+		if e.complexity.Mutation.EditMember == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_editMember_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.EditMember(childComplexity, args["groupId"].(int32), args["changedUserID"].(int32), args["action"].(string)), true
+
 	case "Mutation.ForgotPasswordHandler":
 		if e.complexity.Mutation.ForgotPasswordHandler == nil {
 			break
@@ -616,6 +639,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.Query.Devices(childComplexity), true
 
+	case "Query.groupAiAnalysis":
+		if e.complexity.Query.GroupAiAnalysis == nil {
+			break
+		}
+
+		args, err := ec.field_Query_groupAiAnalysis_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.GroupAiAnalysis(childComplexity, args["groupID"].(int32)), true
+
 	case "Query.notifications":
 		if e.complexity.Query.Notifications == nil {
 			break
@@ -677,19 +712,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.complexity.User.Email(childComplexity), true
 
-	case "User.groups":
-		if e.complexity.User.Groups == nil {
-			break
-		}
-
-		return e.complexity.User.Groups(childComplexity), true
-
 	case "User.id":
 		if e.complexity.User.ID == nil {
 			break
 		}
 
 		return e.complexity.User.ID(childComplexity), true
+
+	case "User.memberships":
+		if e.complexity.User.Memberships == nil {
+			break
+		}
+
+		return e.complexity.User.Memberships(childComplexity), true
 
 	case "User.verified":
 		if e.complexity.User.Verified == nil {
@@ -739,6 +774,34 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.UserGroup.Users(childComplexity), true
+
+	case "UserGroupMember.createdAt":
+		if e.complexity.UserGroupMember.CreatedAt == nil {
+			break
+		}
+
+		return e.complexity.UserGroupMember.CreatedAt(childComplexity), true
+
+	case "UserGroupMember.group":
+		if e.complexity.UserGroupMember.Group == nil {
+			break
+		}
+
+		return e.complexity.UserGroupMember.Group(childComplexity), true
+
+	case "UserGroupMember.isAdmin":
+		if e.complexity.UserGroupMember.IsAdmin == nil {
+			break
+		}
+
+		return e.complexity.UserGroupMember.IsAdmin(childComplexity), true
+
+	case "UserGroupMember.user":
+		if e.complexity.UserGroupMember.User == nil {
+			break
+		}
+
+		return e.complexity.UserGroupMember.User(childComplexity), true
 
 	case "WaterUsage.device":
 		if e.complexity.WaterUsage.Device == nil {
@@ -1311,6 +1374,65 @@ func (ec *executionContext) field_Mutation_createUserGroup_argsGroupName(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_editMember_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Mutation_editMember_argsGroupID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["groupId"] = arg0
+	arg1, err := ec.field_Mutation_editMember_argsChangedUserID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["changedUserID"] = arg1
+	arg2, err := ec.field_Mutation_editMember_argsAction(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["action"] = arg2
+	return args, nil
+}
+func (ec *executionContext) field_Mutation_editMember_argsGroupID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int32, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("groupId"))
+	if tmp, ok := rawArgs["groupId"]; ok {
+		return ec.unmarshalNInt2int32(ctx, tmp)
+	}
+
+	var zeroVal int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_editMember_argsChangedUserID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int32, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("changedUserID"))
+	if tmp, ok := rawArgs["changedUserID"]; ok {
+		return ec.unmarshalNInt2int32(ctx, tmp)
+	}
+
+	var zeroVal int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_editMember_argsAction(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (string, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("action"))
+	if tmp, ok := rawArgs["action"]; ok {
+		return ec.unmarshalNString2string(ctx, tmp)
+	}
+
+	var zeroVal string
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_login_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1626,6 +1748,29 @@ func (ec *executionContext) field_Query_deviceUsage_argsGroupID(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Query_groupAiAnalysis_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_groupAiAnalysis_argsGroupID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["groupID"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_groupAiAnalysis_argsGroupID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int32, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("groupID"))
+	if tmp, ok := rawArgs["groupID"]; ok {
+		return ec.unmarshalNInt2int32(ctx, tmp)
+	}
+
+	var zeroVal int32
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Query_waterUsagesData_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1816,8 +1961,8 @@ func (ec *executionContext) fieldContext_AuthPayload_user(_ context.Context, fie
 				return ec.fieldContext_User_verified(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_User_createdAt(ctx, field)
-			case "groups":
-				return ec.fieldContext_User_groups(ctx, field)
+			case "memberships":
+				return ec.fieldContext_User_memberships(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -3684,6 +3829,58 @@ func (ec *executionContext) fieldContext_Mutation_checkUsageNotifications(_ cont
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_editMember(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Mutation_editMember(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().EditMember(rctx, fc.Args["groupId"].(int32), fc.Args["changedUserID"].(int32), fc.Args["action"].(string))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	fc.Result = res
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Mutation_editMember(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_editMember_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Notification_id(ctx context.Context, field graphql.CollectedField, obj *model.Notification) (ret graphql.Marshaler) {
 	fc, err := ec.fieldContext_Notification_id(ctx, field)
 	if err != nil {
@@ -3923,8 +4120,8 @@ func (ec *executionContext) fieldContext_Query_users(_ context.Context, field gr
 				return ec.fieldContext_User_verified(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_User_createdAt(ctx, field)
-			case "groups":
-				return ec.fieldContext_User_groups(ctx, field)
+			case "memberships":
+				return ec.fieldContext_User_memberships(ctx, field)
 			}
 			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
 		},
@@ -4272,6 +4469,62 @@ func (ec *executionContext) fieldContext_Query_deepSeekAnalysis(ctx context.Cont
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_deepSeekAnalysis_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_groupAiAnalysis(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_Query_groupAiAnalysis(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().GroupAiAnalysis(rctx, fc.Args["groupID"].(int32))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*model.DeepSeekResponse)
+	fc.Result = res
+	return ec.marshalODeepSeekResponse2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐDeepSeekResponse(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_Query_groupAiAnalysis(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "analysis":
+				return ec.fieldContext_DeepSeekResponse_analysis(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type DeepSeekResponse", field.Name)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_groupAiAnalysis_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -4680,8 +4933,8 @@ func (ec *executionContext) fieldContext_User_createdAt(_ context.Context, field
 	return fc, nil
 }
 
-func (ec *executionContext) _User_groups(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
-	fc, err := ec.fieldContext_User_groups(ctx, field)
+func (ec *executionContext) _User_memberships(ctx context.Context, field graphql.CollectedField, obj *model.User) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_User_memberships(ctx, field)
 	if err != nil {
 		return graphql.Null
 	}
@@ -4694,7 +4947,7 @@ func (ec *executionContext) _User_groups(ctx context.Context, field graphql.Coll
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Groups, nil
+		return obj.Memberships, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4706,12 +4959,12 @@ func (ec *executionContext) _User_groups(ctx context.Context, field graphql.Coll
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]*model.UserGroup)
+	res := resTmp.([]*model.UserGroupMember)
 	fc.Result = res
-	return ec.marshalNUserGroup2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐUserGroupᚄ(ctx, field.Selections, res)
+	return ec.marshalNUserGroupMember2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐUserGroupMemberᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_User_groups(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_User_memberships(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "User",
 		Field:      field,
@@ -4719,20 +4972,16 @@ func (ec *executionContext) fieldContext_User_groups(_ context.Context, field gr
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "id":
-				return ec.fieldContext_UserGroup_id(ctx, field)
-			case "name":
-				return ec.fieldContext_UserGroup_name(ctx, field)
+			case "user":
+				return ec.fieldContext_UserGroupMember_user(ctx, field)
+			case "group":
+				return ec.fieldContext_UserGroupMember_group(ctx, field)
+			case "isAdmin":
+				return ec.fieldContext_UserGroupMember_isAdmin(ctx, field)
 			case "createdAt":
-				return ec.fieldContext_UserGroup_createdAt(ctx, field)
-			case "devices":
-				return ec.fieldContext_UserGroup_devices(ctx, field)
-			case "users":
-				return ec.fieldContext_UserGroup_users(ctx, field)
-			case "location":
-				return ec.fieldContext_UserGroup_location(ctx, field)
+				return ec.fieldContext_UserGroupMember_createdAt(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type UserGroup", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type UserGroupMember", field.Name)
 		},
 	}
 	return fc, nil
@@ -4954,9 +5203,9 @@ func (ec *executionContext) _UserGroup_users(ctx context.Context, field graphql.
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]*model.User)
+	res := resTmp.([]*model.UserGroupMember)
 	fc.Result = res
-	return ec.marshalNUser2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐUserᚄ(ctx, field.Selections, res)
+	return ec.marshalNUserGroupMember2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐUserGroupMemberᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) fieldContext_UserGroup_users(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -4967,20 +5216,16 @@ func (ec *executionContext) fieldContext_UserGroup_users(_ context.Context, fiel
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
-			case "id":
-				return ec.fieldContext_User_id(ctx, field)
-			case "email":
-				return ec.fieldContext_User_email(ctx, field)
-			case "displayName":
-				return ec.fieldContext_User_displayName(ctx, field)
-			case "verified":
-				return ec.fieldContext_User_verified(ctx, field)
+			case "user":
+				return ec.fieldContext_UserGroupMember_user(ctx, field)
+			case "group":
+				return ec.fieldContext_UserGroupMember_group(ctx, field)
+			case "isAdmin":
+				return ec.fieldContext_UserGroupMember_isAdmin(ctx, field)
 			case "createdAt":
-				return ec.fieldContext_User_createdAt(ctx, field)
-			case "groups":
-				return ec.fieldContext_User_groups(ctx, field)
+				return ec.fieldContext_UserGroupMember_createdAt(ctx, field)
 			}
-			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+			return nil, fmt.Errorf("no field named %q was found under type UserGroupMember", field.Name)
 		},
 	}
 	return fc, nil
@@ -5025,6 +5270,210 @@ func (ec *executionContext) fieldContext_UserGroup_location(_ context.Context, f
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return nil, errors.New("field of type String does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserGroupMember_user(ctx context.Context, field graphql.CollectedField, obj *model.UserGroupMember) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserGroupMember_user(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.User, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.User)
+	fc.Result = res
+	return ec.marshalNUser2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐUser(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserGroupMember_user(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserGroupMember",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_User_id(ctx, field)
+			case "email":
+				return ec.fieldContext_User_email(ctx, field)
+			case "displayName":
+				return ec.fieldContext_User_displayName(ctx, field)
+			case "verified":
+				return ec.fieldContext_User_verified(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_User_createdAt(ctx, field)
+			case "memberships":
+				return ec.fieldContext_User_memberships(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserGroupMember_group(ctx context.Context, field graphql.CollectedField, obj *model.UserGroupMember) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserGroupMember_group(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Group, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*model.UserGroup)
+	fc.Result = res
+	return ec.marshalNUserGroup2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐUserGroup(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserGroupMember_group(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserGroupMember",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			switch field.Name {
+			case "id":
+				return ec.fieldContext_UserGroup_id(ctx, field)
+			case "name":
+				return ec.fieldContext_UserGroup_name(ctx, field)
+			case "createdAt":
+				return ec.fieldContext_UserGroup_createdAt(ctx, field)
+			case "devices":
+				return ec.fieldContext_UserGroup_devices(ctx, field)
+			case "users":
+				return ec.fieldContext_UserGroup_users(ctx, field)
+			case "location":
+				return ec.fieldContext_UserGroup_location(ctx, field)
+			}
+			return nil, fmt.Errorf("no field named %q was found under type UserGroup", field.Name)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserGroupMember_isAdmin(ctx context.Context, field graphql.CollectedField, obj *model.UserGroupMember) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserGroupMember_isAdmin(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsAdmin, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	fc.Result = res
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserGroupMember_isAdmin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserGroupMember",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _UserGroupMember_createdAt(ctx context.Context, field graphql.CollectedField, obj *model.UserGroupMember) (ret graphql.Marshaler) {
+	fc, err := ec.fieldContext_UserGroupMember_createdAt(ctx, field)
+	if err != nil {
+		return graphql.Null
+	}
+	ctx = graphql.WithFieldContext(ctx, fc)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CreatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	fc.Result = res
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) fieldContext_UserGroupMember_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "UserGroupMember",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Time does not have child fields")
 		},
 	}
 	return fc, nil
@@ -8080,6 +8529,10 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "editMember":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_editMember(ctx, field)
+			})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -8327,6 +8780,25 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			}
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
+		case "groupAiAnalysis":
+			field := field
+
+			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_groupAiAnalysis(ctx, field)
+				return res
+			}
+
+			rrm := func(ctx context.Context) graphql.Marshaler {
+				return ec.OperationContext.RootResolverMiddleware(ctx,
+					func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			}
+
+			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return rrm(innerCtx) })
 		case "notifications":
 			field := field
 
@@ -8413,8 +8885,8 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
-		case "groups":
-			out.Values[i] = ec._User_groups(ctx, field, obj)
+		case "memberships":
+			out.Values[i] = ec._User_memberships(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -8479,6 +8951,60 @@ func (ec *executionContext) _UserGroup(ctx context.Context, sel ast.SelectionSet
 			}
 		case "location":
 			out.Values[i] = ec._UserGroup_location(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	atomic.AddInt32(&ec.deferred, int32(len(deferred)))
+
+	for label, dfs := range deferred {
+		ec.processDeferredGroup(graphql.DeferredGroup{
+			Label:    label,
+			Path:     graphql.GetPath(ctx),
+			FieldSet: dfs,
+			Context:  ctx,
+		})
+	}
+
+	return out
+}
+
+var userGroupMemberImplementors = []string{"UserGroupMember"}
+
+func (ec *executionContext) _UserGroupMember(ctx context.Context, sel ast.SelectionSet, obj *model.UserGroupMember) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, userGroupMemberImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := make(map[string]*graphql.FieldSet)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("UserGroupMember")
+		case "user":
+			out.Values[i] = ec._UserGroupMember_user(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "group":
+			out.Values[i] = ec._UserGroupMember_group(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "isAdmin":
+			out.Values[i] = ec._UserGroupMember_isAdmin(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._UserGroupMember_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -9576,6 +10102,60 @@ func (ec *executionContext) marshalNUserGroup2ᚖETᚑSensorAPIᚋgraphᚋmodel�
 		return graphql.Null
 	}
 	return ec._UserGroup(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNUserGroupMember2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐUserGroupMemberᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.UserGroupMember) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		fc := &graphql.FieldContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithFieldContext(ctx, fc)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNUserGroupMember2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐUserGroupMember(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNUserGroupMember2ᚖETᚑSensorAPIᚋgraphᚋmodelᚐUserGroupMember(ctx context.Context, sel ast.SelectionSet, v *model.UserGroupMember) graphql.Marshaler {
+	if v == nil {
+		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
+			ec.Errorf(ctx, "the requested element is null which the schema does not allow")
+		}
+		return graphql.Null
+	}
+	return ec._UserGroupMember(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNWaterData2ETᚑSensorAPIᚋgraphᚋmodelᚐWaterData(ctx context.Context, sel ast.SelectionSet, v model.WaterData) graphql.Marshaler {
