@@ -709,7 +709,7 @@ func (r *mutationResolver) EditMember(ctx context.Context, groupID int32, change
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 	var users []models.User
-	if err := config.DB.Preload("Memberships.Group").Find(&users).Error; err != nil {
+	if err := config.DB.Preload("Memberships.UserGroup").Find(&users).Error; err != nil {
 		return nil, fmt.Errorf("failed to fetch users: %w", err)
 	}
 
@@ -722,17 +722,25 @@ func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 					ID:        fmt.Sprintf("%d", m.UserGroup.ID),
 					Name:      m.UserGroup.Name,
 					CreatedAt: m.UserGroup.CreatedAt,
-					Location:  m.UserGroup.Location,
+					Location:  m.UserGroup.Location, // Assuming it's []string-compatible
+				},
+				User: &model.User{
+					ID: fmt.Sprintf("%d", u.ID),
 				},
 				IsAdmin:   m.IsAdmin,
 				CreatedAt: m.CreatedAt,
 			}
 		}
 
+		var displayName *string
+		if u.DisplayName != "" {
+			displayName = &u.DisplayName
+		}
+
 		result[i] = &model.User{
 			ID:          fmt.Sprintf("%d", u.ID),
 			Email:       u.Email,
-			DisplayName: &u.DisplayName,
+			DisplayName: displayName,
 			Verified:    u.Verified,
 			CreatedAt:   u.CreatedAt,
 			Memberships: memberships,
