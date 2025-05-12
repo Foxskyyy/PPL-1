@@ -101,33 +101,57 @@ func (r *mutationResolver) Register(ctx context.Context, displayName string, ema
 
 // AssignUserToGroup is the resolver for the assignUserToGroup field.
 func (r *mutationResolver) AssignUserToGroup(ctx context.Context, senderEmail string, userGroupID int32, receiverEmail string) (*string, error) {
-	var user models.User
-	if err := config.DB.Where("email = ?", receiverEmail).First(&user).Error; err != nil {
-		return nil, errors.New("user not found")
-	}
+	
+    tx := config.DB.Begin()
+    if tx.Error != nil {
+        return nil, fmt.Errorf("failed to start transaction: %w", tx.Error)
+    }
 
-	var group models.UserGroup
-	if err := config.DB.First(&group, userGroupID).Error; err != nil {
-		return nil, errors.New("group not found")
-	}
+    var user models.User
+    if err := tx.Where("email = ?", receiverEmail).First(&user).Error; err != nil {
+        tx.Rollback()
+        return nil, fmt.Errorf("user not found: %w", err)
+    }
 
-	var count int64
-	config.DB.Model(&models.UserGroupMember{}).Where("user_group_id = ?", group.ID).Count(&count)
-	if count >= 4 {
-		return nil, errors.New("user group cannot have more than 4 users")
-	}
+    var group models.UserGroup
+    if err := tx.First(&group, userGroupID).Error; err != nil {
+        tx.Rollback()
+        return nil, fmt.Errorf("group not found: %w", err)
+    }
 
-	membership := models.UserGroupMember{UserID: user.ID, UserGroupID: group.ID, IsAdmin: false}
-	if err := config.DB.Create(&membership).Error; err != nil {
-		return nil, errors.New("failed to assign user to group")
-	}
+    var count int64
+    if err := tx.Model(&models.UserGroupMember{}).
+        Where("user_group_id = ?", group.ID).
+        Count(&count).Error; err != nil {
+        tx.Rollback()
+        return nil, fmt.Errorf("failed to check member count: %w", err)
+    }
+    if count >= 4 {
+        tx.Rollback()
+        return nil, errors.New("user group cannot have more than 4 users")
+    }
 
-	if err := utils.SendInvitationEmail(senderEmail, receiverEmail, group.Name); err != nil {
-		return nil, errors.New("failed to send invitation email")
-	}
+    membership := models.UserGroupMember{
+        UserID:      user.ID,
+        UserGroupID: group.ID,
+        IsAdmin:     false,
+    }
+    if err := tx.Create(&membership).Error; err != nil {
+        tx.Rollback()
+        return nil, fmt.Errorf("failed to assign user to group: %w", err)
+    }
 
-	successMessage := "User assigned to group successfully"
-	return &successMessage, nil
+    if err := utils.SendInvitationEmail(senderEmail, receiverEmail, group.Name); err != nil {
+        tx.Rollback()
+        return nil, fmt.Errorf("failed to send invitation email: %w", err)
+    }
+
+    if err := tx.Commit().Error; err != nil {
+        return nil, fmt.Errorf("failed to commit transaction: %w", err)
+    }
+
+    successMessage := "User assigned to group successfully"
+    return &successMessage, nil
 }
 
 // VerifyEmail is the resolver for the verifyEmail field.
