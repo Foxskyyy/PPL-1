@@ -10,30 +10,35 @@ import (
 )
 
 type User struct {
-	ID           uint      `json:"id" gorm:"primaryKey"`
-	Email        string    `json:"email" gorm:"unique"`
-	Password     string    `json:"-"`
-	DisplayName  string    `json:"displayname"`
-	RefreshToken string    `json:"refresh_token,omitempty"`
-	Verified     bool      `json:"verified" gorm:"default:false"`
-	VerifyToken  string    `json:"verify_token" gorm:"default:null"`
-	Provider     string    `json:"provider"`
-	ProviderID   string    `json:"provider_id"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           uint              `gorm:"primaryKey" json:"id"`
+	Email        string            `gorm:"unique" json:"email"`
+	Password     string            `json:"-"`
+	DisplayName  string            `json:"displayname"`
+	RefreshToken string            `json:"refresh_token,omitempty"`
+	Verified     bool              `gorm:"default:false" json:"verified"`
+	VerifyToken  string            `gorm:"default:null" json:"verify_token"`
+	Provider     string            `json:"provider"`
+	ProviderID   string            `json:"provider_id"`
+	CreatedAt    time.Time         `json:"created_at"`
+	Memberships  []UserGroupMember `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE"` // Fixed
 }
 
 type UserGroup struct {
-	ID        uint   `gorm:"primaryKey"`
-	Name      string `gorm:"unique"`
-	CreatedAt time.Time
-	Devices   []Device  `gorm:"foreignKey:UserGroupID"`
-	Location  JSONArray `gorm:"type:jsonb"`
+	ID        uint              `gorm:"primaryKey" json:"id"`
+	Name      string            `gorm:"unique" json:"name"`
+	CreatedAt time.Time         `json:"created_at"`
+	Devices   []Device          `gorm:"foreignKey:UserGroupID;constraint:OnDelete:CASCADE"`
+	Location  JSONArray         `gorm:"type:jsonb" json:"location"`
+	Members   []UserGroupMember `gorm:"foreignKey:UserGroupID;constraint:OnDelete:CASCADE"` // Fixed
 }
 
 type UserGroupMember struct {
-	UserID      uint      `json:"user_id"`
-	UserGroupID uint      `json:"user_group_id"`
+	UserID      uint      `gorm:"primaryKey" json:"user_id"`
+	UserGroupID uint      `gorm:"primaryKey" json:"user_group_id"`
+	IsAdmin     bool      `gorm:"default:false" json:"is_admin"`
 	CreatedAt   time.Time `json:"created_at"`
+	User        User      `gorm:"foreignKey:UserID;constraint:OnDelete:CASCADE;references:ID"`
+	UserGroup   UserGroup `gorm:"foreignKey:UserGroupID;constraint:OnDelete:CASCADE;references:ID"`
 }
 
 func (ugm *UserGroupMember) BeforeCreate(tx *gorm.DB) error {
@@ -48,7 +53,7 @@ func (ugm *UserGroupMember) BeforeCreate(tx *gorm.DB) error {
 type Device struct {
 	ID          string    `gorm:"primaryKey"`
 	UserGroupID uint      `gorm:"index"`
-	UserGroup   UserGroup `gorm:"constraint:OnDelete:CASCADE;"`
+	UserGroup   UserGroup `gorm:"foreignKey:UserGroupID;constraint:OnDelete:CASCADE;"`
 	Name        string
 	Location    string
 	CreatedAt   time.Time

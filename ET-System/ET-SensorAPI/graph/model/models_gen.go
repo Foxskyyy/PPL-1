@@ -79,21 +79,28 @@ type Query struct {
 }
 
 type User struct {
-	ID          string       `json:"id"`
-	Email       string       `json:"email"`
-	DisplayName *string      `json:"displayName,omitempty"`
-	Verified    bool         `json:"verified"`
-	CreatedAt   time.Time    `json:"createdAt"`
-	Groups      []*UserGroup `json:"groups"`
+	ID          string             `json:"id"`
+	Email       string             `json:"email"`
+	DisplayName *string            `json:"displayName,omitempty"`
+	Verified    bool               `json:"verified"`
+	CreatedAt   time.Time          `json:"createdAt"`
+	Memberships []*UserGroupMember `json:"memberships"`
 }
 
 type UserGroup struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"createdAt"`
-	Devices   []*Device `json:"devices"`
-	Users     []*User   `json:"users"`
-	Location  []string  `json:"location"`
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	CreatedAt time.Time          `json:"createdAt"`
+	Devices   []*Device          `json:"devices"`
+	Users     []*UserGroupMember `json:"users"`
+	Location  []string           `json:"location"`
+}
+
+type UserGroupMember struct {
+	User      *User      `json:"user"`
+	Group     *UserGroup `json:"group"`
+	IsAdmin   bool       `json:"isAdmin"`
+	CreatedAt time.Time  `json:"createdAt"`
 }
 
 type WaterUsage struct {

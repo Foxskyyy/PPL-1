@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -38,32 +37,31 @@ func (r *mutationResolver) Login(ctx context.Context, email string, password str
 		return nil, errors.New("failed to generate verification token")
 	}
 
-	if err := utils.SendVerificationEmail(email, code); err != nil {
-		return nil, errors.New("failed to send verification email")
+	if !user.Verified {
+		if err := utils.SendVerificationEmail(email, code); err != nil {
+			return nil, errors.New("failed to send verification email")
+		}
+		user.VerifyToken = code
 	}
 
-	user.VerifyToken = code
 	user.RefreshToken = token
 
 	if err := config.DB.Save(&user).Error; err != nil {
-		return nil, errors.New("failed to verify email")
+		return nil, errors.New("failed to save user")
 	}
 
-	groupIDs := utils.FetchUserGroupIDs(user.ID)
-	var groups []*model.UserGroup
-	for _, id := range groupIDs {
-		groups = append(groups, &model.UserGroup{ID: strconv.Itoa(int(id))})
+	var memberships []models.UserGroupMember
+	if err := config.DB.
+		Preload("User").
+		Preload("UserGroup").
+		Where("user_id = ?", user.ID).
+		Find(&memberships).Error; err != nil {
+		return nil, errors.New("failed to load memberships")
 	}
 
+	authUser := utils.ConvertAuthedUserToGQL(*user, memberships)
 	return &model.AuthPayload{
-		User: &model.User{
-			ID:          strconv.Itoa(int(user.ID)),
-			DisplayName: &user.DisplayName, // Fix: string to *string
-			Email:       user.Email,
-			Verified:    user.Verified,
-			CreatedAt:   user.CreatedAt,
-			Groups:      groups,
-		},
+		User:  authUser,
 		Token: token,
 	}, nil
 }
@@ -119,7 +117,7 @@ func (r *mutationResolver) AssignUserToGroup(ctx context.Context, senderEmail st
 		return nil, errors.New("user group cannot have more than 4 users")
 	}
 
-	membership := models.UserGroupMember{UserID: user.ID, UserGroupID: group.ID}
+	membership := models.UserGroupMember{UserID: user.ID, UserGroupID: group.ID, IsAdmin: false}
 	if err := config.DB.Create(&membership).Error; err != nil {
 		return nil, errors.New("failed to assign user to group")
 	}
@@ -265,84 +263,63 @@ func (r *mutationResolver) ChangeEmail(ctx context.Context, email string, passwo
 
 // CreateUserGroup is the resolver for the createUserGroup field.
 func (r *mutationResolver) CreateUserGroup(ctx context.Context, userID int32, groupName string) (*model.UserGroup, error) {
-	if groupName == "" {
-		return nil, errors.New("group name cannot be empty")
-	}
-	if userID <= 0 {
-		return nil, errors.New("invalid user ID")
-	}
-
-	var user models.User
-	if err := config.DB.First(&user, uint(userID)).Error; err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
-	}
-
 	tx := config.DB.Begin()
 	defer func() {
-		if r := recover(); r != nil || tx.Error != nil {
+		if r := recover(); r != nil {
 			tx.Rollback()
 		}
 	}()
 
 	group := models.UserGroup{Name: groupName}
 	if err := tx.Create(&group).Error; err != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("failed to create user group: %w", err)
+		return nil, fmt.Errorf("failed to create group: %w", err)
 	}
 
 	member := models.UserGroupMember{
 		UserID:      uint(userID),
 		UserGroupID: group.ID,
+		IsAdmin:     true,
 	}
 	if err := tx.Create(&member).Error; err != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("failed to add user to group: %w", err)
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+		return nil, fmt.Errorf("failed to add creator to group: %w", err)
 	}
 
 	var members []models.UserGroupMember
-	if err := config.DB.Where("user_group_id = ?", group.ID).Find(&members).Error; err != nil {
-		return nil, fmt.Errorf("failed to fetch group members: %w", err)
+	if err := tx.Preload("User").Preload("Group").
+		Where("user_group_id = ?", group.ID).
+		Find(&members).Error; err != nil {
+		return nil, fmt.Errorf("failed to load group members: %w", err)
 	}
 
-	userIDs := make([]uint, 0, len(members))
-	for _, member := range members {
-		userIDs = append(userIDs, member.UserID)
-	}
-	var users []models.User
-	if len(userIDs) > 0 {
-		if err := config.DB.Where("id IN ?", userIDs).Find(&users).Error; err != nil {
-			return nil, fmt.Errorf("failed to fetch users: %w", err)
+	users := make([]*model.UserGroupMember, len(members))
+	for i, m := range members {
+		users[i] = &model.UserGroupMember{
+			User: &model.User{
+				ID:          fmt.Sprintf("%d", m.User.ID),
+				Email:       m.User.Email,
+				DisplayName: &m.User.DisplayName,
+				Verified:    m.User.Verified,
+				CreatedAt:   m.User.CreatedAt,
+				Memberships: []*model.UserGroupMember{},
+			},
+			Group: &model.UserGroup{
+				ID:        fmt.Sprintf("%d", m.UserGroup.ID),
+				Name:      m.UserGroup.Name,
+				CreatedAt: m.UserGroup.CreatedAt,
+				Location:  m.UserGroup.Location,
+			},
+			IsAdmin:   m.IsAdmin,
+			CreatedAt: m.CreatedAt,
 		}
 	}
 
-	graphqlUsers := make([]*model.User, 0, len(users))
-	for _, u := range users {
-		displayName := &u.DisplayName
-		graphqlUsers = append(graphqlUsers, &model.User{
-			ID:          strconv.Itoa(int(u.ID)),
-			Email:       u.Email,
-			DisplayName: displayName,
-			Verified:    u.Verified,
-			CreatedAt:   u.CreatedAt,
-		})
-	}
-
-	// Fetch devices (new group should have none)
-	var groupWithDevices models.UserGroup
-	if err := config.DB.Preload("Devices").First(&groupWithDevices, group.ID).Error; err != nil {
-		return nil, fmt.Errorf("failed to reload user group: %w", err)
-	}
-
 	return &model.UserGroup{
-		ID:        strconv.Itoa(int(group.ID)),
+		ID:        fmt.Sprintf("%d", group.ID),
 		Name:      group.Name,
 		CreatedAt: group.CreatedAt,
+		Location:  group.Location,
+		Users:     users,
 		Devices:   []*model.Device{},
-		Users:     graphqlUsers,
 	}, nil
 }
 
@@ -394,48 +371,40 @@ func (r *mutationResolver) AddDeviceToUserGroup(ctx context.Context, deviceID st
 	}
 
 	var members []models.UserGroupMember
-	if err := config.DB.Where("user_group_id = ?", group.ID).Find(&members).Error; err != nil {
+	if err := config.DB.Preload("User").Where("user_group_id = ?", group.ID).Find(&members).Error; err != nil {
 		return nil, fmt.Errorf("failed to fetch group members: %w", err)
-	}
-
-	userIDs := make([]uint, 0, len(members))
-	for _, member := range members {
-		userIDs = append(userIDs, member.UserID)
-	}
-	var users []models.User
-	if len(userIDs) > 0 {
-		if err := config.DB.Where("id IN ?", userIDs).Find(&users).Error; err != nil {
-			return nil, fmt.Errorf("failed to fetch users: %w", err)
-		}
 	}
 
 	devices := make([]*model.Device, 0, len(group.Devices))
 	for _, d := range group.Devices {
 		devices = append(devices, &model.Device{
-			ID: d.ID,
+			ID:        d.ID,
+			Name:      d.Name,
+			Location:  d.Location,
+			CreatedAt: d.CreatedAt,
 			UserGroup: &model.UserGroup{
 				ID:        strconv.Itoa(int(group.ID)),
 				Name:      group.Name,
 				CreatedAt: group.CreatedAt,
-				Devices:   []*model.Device{},
-				Users:     []*model.User{},
 			},
-			Name:        d.Name,
-			Location:    d.Location,
-			CreatedAt:   d.CreatedAt,
 			WaterUsages: []*model.WaterUsage{},
 		})
 	}
 
-	graphqlUsers := make([]*model.User, 0, len(users))
-	for _, u := range users {
-		displayName := &u.DisplayName
-		graphqlUsers = append(graphqlUsers, &model.User{
-			ID:          strconv.Itoa(int(u.ID)),
-			Email:       u.Email,
-			DisplayName: displayName,
-			Verified:    u.Verified,
-			CreatedAt:   u.CreatedAt,
+	graphqlMembers := make([]*model.UserGroupMember, 0, len(members))
+	for _, m := range members {
+		displayName := &m.User.DisplayName
+		graphqlMembers = append(graphqlMembers, &model.UserGroupMember{
+			IsAdmin:   m.IsAdmin,
+			CreatedAt: m.CreatedAt,
+			User: &model.User{
+				ID:          strconv.Itoa(int(m.User.ID)),
+				Email:       m.User.Email,
+				DisplayName: displayName,
+				Verified:    m.User.Verified,
+				CreatedAt:   m.User.CreatedAt,
+				Memberships: []*model.UserGroupMember{},
+			},
 		})
 	}
 
@@ -444,7 +413,8 @@ func (r *mutationResolver) AddDeviceToUserGroup(ctx context.Context, deviceID st
 		Name:      group.Name,
 		CreatedAt: group.CreatedAt,
 		Devices:   devices,
-		Users:     graphqlUsers,
+		Users:     graphqlMembers,
+		Location:  group.Location,
 	}, nil
 }
 
@@ -454,11 +424,15 @@ func (r *mutationResolver) OauthLogin(ctx context.Context, provider model.OAuthP
 		return nil, errors.New("token is required")
 	}
 
-	var user models.User
-	var email, displayName, providerID string
-	var err error
+	var (
+		user        models.User
+		email       string
+		displayName string
+		providerID  string
+	)
 
 	providerStr := strings.ToLower(string(provider))
+
 	switch provider {
 	case model.OAuthProviderGoogle:
 		clientID := config.GetEnv("GOOGLE_CLIENT_ID", "")
@@ -471,9 +445,16 @@ func (r *mutationResolver) OauthLogin(ctx context.Context, provider model.OAuthP
 			return nil, fmt.Errorf("invalid Google token: %w", err)
 		}
 
-		providerID = payload.Claims["sub"].(string)
-		email = payload.Claims["email"].(string)
-		displayName = payload.Claims["name"].(string)
+		sub, ok1 := payload.Claims["sub"].(string)
+		emailClaim, ok2 := payload.Claims["email"].(string)
+		nameClaim, ok3 := payload.Claims["name"].(string)
+		if !ok1 || !ok2 || !ok3 {
+			return nil, errors.New("missing required claims from Google token")
+		}
+
+		providerID = sub
+		email = emailClaim
+		displayName = nameClaim
 
 	case model.OAuthProviderApple:
 		claims, err := utils.ValidateAppleToken(token)
@@ -481,25 +462,23 @@ func (r *mutationResolver) OauthLogin(ctx context.Context, provider model.OAuthP
 			return nil, fmt.Errorf("invalid Apple token: %w", err)
 		}
 
-		providerID = claims["sub"].(string)
+		sub, ok := claims["sub"].(string)
+		if !ok {
+			return nil, errors.New("missing 'sub' in Apple token")
+		}
+		providerID = sub
 		if emailVal, ok := claims["email"].(string); ok {
 			email = emailVal
 		}
 
 	default:
-		return nil, errors.New("unsupported provider")
+		return nil, errors.New("unsupported OAuth provider")
 	}
 
-	err = config.DB.Where("provider = ? AND provider_id = ?", providerStr, providerID).First(&user).Error
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("database error: %w", err)
-	}
+	err := config.DB.Where("provider = ? AND provider_id = ?", providerStr, providerID).First(&user).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) && email != "" {
 		err = config.DB.Where("email = ?", email).First(&user).Error
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("database error: %w", err)
-		}
 	}
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -515,14 +494,13 @@ func (r *mutationResolver) OauthLogin(ctx context.Context, provider model.OAuthP
 		if err := config.DB.Create(&user).Error; err != nil {
 			return nil, fmt.Errorf("failed to create user: %w", err)
 		}
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to fetch user: %w", err)
 	} else {
-		user.Provider = providerStr
-		user.ProviderID = providerID
-
-		if email != "" && user.Email != email {
+		if user.Email != email && email != "" {
 			var existingUser models.User
 			if err := config.DB.Where("email = ?", email).First(&existingUser).Error; err == nil && existingUser.ID != user.ID {
-				return nil, errors.New("email already registered")
+				return nil, errors.New("email already registered to another user")
 			}
 			user.Email = email
 		}
@@ -531,6 +509,8 @@ func (r *mutationResolver) OauthLogin(ctx context.Context, provider model.OAuthP
 			user.DisplayName = displayName
 		}
 
+		user.Provider = providerStr
+		user.ProviderID = providerID
 		user.Verified = true
 
 		if err := config.DB.Save(&user).Error; err != nil {
@@ -549,9 +529,11 @@ func (r *mutationResolver) OauthLogin(ctx context.Context, provider model.OAuthP
 	}
 
 	groupIDs := utils.FetchUserGroupIDs(user.ID)
-	var groups []*model.UserGroup
+	memberships := make([]*model.UserGroupMember, 0, len(groupIDs))
 	for _, id := range groupIDs {
-		groups = append(groups, &model.UserGroup{ID: strconv.Itoa(int(id))})
+		memberships = append(memberships, &model.UserGroupMember{
+			Group: &model.UserGroup{ID: strconv.Itoa(int(id))},
+		})
 	}
 
 	gqlUser := &model.User{
@@ -560,7 +542,7 @@ func (r *mutationResolver) OauthLogin(ctx context.Context, provider model.OAuthP
 		DisplayName: &user.DisplayName,
 		Verified:    user.Verified,
 		CreatedAt:   user.CreatedAt,
-		Groups:      groups,
+		Memberships: memberships,
 	}
 
 	return &model.AuthPayload{
@@ -669,30 +651,92 @@ func (r *mutationResolver) CheckUsageNotifications(ctx context.Context) (bool, e
 	return true, nil
 }
 
+// EditMember is the resolver for the editMember field.
+func (r *mutationResolver) EditMember(ctx context.Context, groupID int32, changedUserID int32, action string) (*string, error) {
+	var userMember model.UserGroupMember
+	var userGroup model.UserGroup
+
+	tx := config.DB.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	if err := tx.Set("gorm:query_option", "FOR UPDATE").
+		Where("id = ?", groupID).
+		First(&userGroup).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("group not found: %w", err)
+	}
+
+	if err := tx.Where("user_id = ? AND user_group_id = ?", changedUserID, groupID).First(&userMember).Error; err != nil {
+		tx.Rollback()
+		return nil, fmt.Errorf("user not found in specified group")
+	}
+
+	if action == "REMOVE" {
+		if err := tx.Where("user_id = ? AND user_group_id = ?", userMember, groupID).Delete(&models.UserGroupMember{}).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to remove user from group: %w", err)
+		}
+	}
+
+	if action == "ADMIN_PERMS" {
+		userMember.IsAdmin = true
+		if err := tx.Where("user_id = ? AND user_group_id = ?", userMember, groupID).Save(&models.UserGroupMember{}).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to update user permission: %w", err)
+		}
+	}
+
+	if action == "MEMBER_PERMS" {
+		userMember.IsAdmin = false
+		if err := tx.Where("user_id = ? AND user_group_id = ?", userMember, groupID).Save(&models.UserGroupMember{}).Error; err != nil {
+			tx.Rollback()
+			return nil, fmt.Errorf("failed to update user permission: %w", err)
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, fmt.Errorf("transaction failed: %w", err)
+	}
+
+	successMessage := "User Updated successfully"
+	return &successMessage, nil
+}
+
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 	var users []models.User
-	if err := config.DB.Find(&users).Error; err != nil {
-		return nil, err
+	if err := config.DB.Preload("Memberships.Group").Find(&users).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch users: %w", err)
 	}
 
-	var result []*model.User
-	for _, u := range users {
-		groupIDs := utils.FetchUserGroupIDs(u.ID)
-		var groups []*model.UserGroup
-		for _, id := range groupIDs {
-			groups = append(groups, &model.UserGroup{ID: strconv.Itoa(int(id))})
+	result := make([]*model.User, len(users))
+	for i, u := range users {
+		memberships := make([]*model.UserGroupMember, len(u.Memberships))
+		for j, m := range u.Memberships {
+			memberships[j] = &model.UserGroupMember{
+				Group: &model.UserGroup{
+					ID:        fmt.Sprintf("%d", m.UserGroup.ID),
+					Name:      m.UserGroup.Name,
+					CreatedAt: m.UserGroup.CreatedAt,
+					Location:  m.UserGroup.Location,
+				},
+				IsAdmin:   m.IsAdmin,
+				CreatedAt: m.CreatedAt,
+			}
 		}
 
-		displayName := &u.DisplayName
-		result = append(result, &model.User{
-			ID:          strconv.Itoa(int(u.ID)),
+		result[i] = &model.User{
+			ID:          fmt.Sprintf("%d", u.ID),
 			Email:       u.Email,
-			DisplayName: displayName,
+			DisplayName: &u.DisplayName,
 			Verified:    u.Verified,
 			CreatedAt:   u.CreatedAt,
-			Groups:      groups,
-		})
+			Memberships: memberships,
+		}
 	}
 	return result, nil
 }
@@ -700,47 +744,52 @@ func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 // UserGroups is the resolver for the userGroups field.
 func (r *queryResolver) UserGroups(ctx context.Context) ([]*model.UserGroup, error) {
 	var groups []models.UserGroup
-	if err := config.DB.Preload("Devices.WaterUsages").Find(&groups).Error; err != nil {
-		return nil, err
+	if err := config.DB.Preload("Devices").Preload("Members.User").Find(&groups).Error; err != nil {
+		return nil, fmt.Errorf("failed to fetch groups: %w", err)
 	}
 
-	var result []*model.UserGroup
-	for _, g := range groups {
-		users := utils.FetchGroupUsers(g.ID)
-		var devices []*model.Device
-		for _, d := range g.Devices {
-			var waterUsages []*model.WaterUsage
-			for _, wu := range d.WaterUsages {
-				waterUsages = append(waterUsages, &model.WaterUsage{
-					FlowRate:   wu.FlowRate,
-					TotalUsage: wu.TotalUsage,
-					RecordedAt: wu.RecordedAt,
-				})
-			}
-
-			devices = append(devices, &model.Device{
-				ID:          d.ID,
-				Name:        d.Name,
-				Location:    d.Location,
-				CreatedAt:   d.CreatedAt,
-				WaterUsages: waterUsages,
-				UserGroup: &model.UserGroup{
-					ID:        strconv.Itoa(int(g.ID)),
+	result := make([]*model.UserGroup, len(groups))
+	for i, g := range groups {
+		members := make([]*model.UserGroupMember, len(g.Members))
+		for j, m := range g.Members {
+			members[j] = &model.UserGroupMember{
+				User: &model.User{
+					ID:          fmt.Sprintf("%d", m.User.ID),
+					Email:       m.User.Email,
+					DisplayName: &m.User.DisplayName,
+					Verified:    m.User.Verified,
+					CreatedAt:   m.User.CreatedAt,
+					Memberships: []*model.UserGroupMember{}, // Populated by resolver if needed
+				},
+				Group: &model.UserGroup{
+					ID:        fmt.Sprintf("%d", g.ID),
 					Name:      g.Name,
 					CreatedAt: g.CreatedAt,
-					Devices:   []*model.Device{},
-					Users:     []*model.User{},
+					Location:  g.Location,
 				},
-			})
+				IsAdmin:   m.IsAdmin,
+				CreatedAt: m.CreatedAt,
+			}
 		}
-		result = append(result, &model.UserGroup{
-			ID:        strconv.Itoa(int(g.ID)),
+
+		devices := make([]*model.Device, len(g.Devices))
+		for k, d := range g.Devices {
+			devices[k] = &model.Device{
+				ID:        d.ID,
+				Name:      d.Name,
+				Location:  d.Location,
+				CreatedAt: d.CreatedAt,
+			}
+		}
+
+		result[i] = &model.UserGroup{
+			ID:        fmt.Sprintf("%d", g.ID),
 			Name:      g.Name,
-			Location:  g.Location,
 			CreatedAt: g.CreatedAt,
+			Location:  g.Location,
+			Users:     members,
 			Devices:   devices,
-			Users:     users,
-		})
+		}
 	}
 	return result, nil
 }
@@ -779,7 +828,7 @@ func (r *queryResolver) Devices(ctx context.Context) ([]*model.Device, error) {
 				Name:      group.Name,
 				CreatedAt: group.CreatedAt,
 				Devices:   []*model.Device{},
-				Users:     []*model.User{},
+				Users:     []*model.UserGroupMember{},
 			},
 		})
 	}
@@ -856,7 +905,7 @@ func (r *queryResolver) WaterUsages(ctx context.Context) ([]*model.WaterUsage, e
 					Name:      group.Name,
 					CreatedAt: group.CreatedAt,
 					Devices:   []*model.Device{},
-					Users:     []*model.User{},
+					Users:     []*model.UserGroupMember{},
 				},
 			},
 		})
@@ -884,19 +933,19 @@ func (r *queryResolver) WaterUsagesData(ctx context.Context, deviceID string, ti
 
 	gqlData := make([]*model.WaterUsage, len(dbResults))
 	for i, wu := range dbResults {
-		gqlData[i] = convertToGQLWaterUsage(wu)
+		gqlData[i] = utils.ConvertToGQLWaterUsage(wu)
 	}
 
 	switch timeFilter {
 	case "1d":
 		return &model.WaterUsageList{Data: gqlData}, nil
 	case "1w":
-		dailyData := processWeeklyData(gqlData)
+		dailyData := utils.ProcessWeeklyData(gqlData)
 		return &model.DailyDataList{Data: dailyData}, nil
 	case "1m":
-		return processMonthlyData(gqlData), nil
+		return utils.ProcessMonthlyData(gqlData), nil
 	case "1y":
-		return processYearlyData(gqlData), nil
+		return utils.ProcessYearlyData(gqlData), nil
 	default:
 		return nil, fmt.Errorf("unsupported time filter: %s", timeFilter)
 	}
@@ -905,6 +954,28 @@ func (r *queryResolver) WaterUsagesData(ctx context.Context, deviceID string, ti
 // DeepSeekAnalysis is the resolver for the deepSeekAnalysis field.
 func (r *queryResolver) DeepSeekAnalysis(ctx context.Context, userID int32) (*model.DeepSeekResponse, error) {
 	water, err := utils.GetUserUsageData(uint(userID))
+	if err != nil {
+		return nil, err
+	}
+
+	usage := map[string]interface{}{
+		"waterUsage": water,
+	}
+	jsonData, err := json.Marshal(usage)
+	if err != nil {
+		return nil, err
+	}
+
+	analysis, err := utils.AnalyzeUsageData(string(jsonData))
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.DeepSeekResponse{Analysis: &analysis}, nil
+}
+
+func (r *queryResolver) GroupAiAnalysis(ctx context.Context, groupID int32) (*model.DeepSeekResponse, error) {
+	water, err := utils.GetGroupUsageData(uint(groupID))
 	if err != nil {
 		return nil, err
 	}
@@ -940,7 +1011,7 @@ func (r *queryResolver) Notifications(ctx context.Context) ([]*model.Notificatio
 			ID:        fmt.Sprintf("%d", n.ID),
 			Message:   n.Message,
 			CreatedAt: n.CreatedAt,
-			Device:    convertToGQLDevice(n.Device),
+			Device:    utils.ConvertToGQLDevice(n.Device),
 		})
 	}
 	return result, nil
@@ -961,153 +1032,3 @@ type queryResolver struct{ *Resolver }
 //   - When renaming or deleting a resolver the old code will be put in here. You can safely delete
 //     it when you're done.
 //   - You have helper methods in this file. Move them out to keep these resolver files clean.
-
-func convertToGQLDevice(d models.Device) *model.Device {
-	return &model.Device{
-		ID:        d.ID,
-		Name:      d.Name,
-		Location:  d.Location,
-		CreatedAt: d.CreatedAt,
-	}
-
-}
-
-func convertToGQLWaterUsage(wu models.WaterUsage) *model.WaterUsage {
-	return &model.WaterUsage{
-		ID:         fmt.Sprintf("%d", wu.ID),
-		FlowRate:   wu.FlowRate,
-		TotalUsage: wu.TotalUsage,
-		RecordedAt: wu.RecordedAt,
-		Device: &model.Device{
-			ID:       wu.Device.ID,
-			Name:     wu.Device.Name,
-			Location: wu.Device.Location,
-			UserGroup: &model.UserGroup{
-				ID:   fmt.Sprintf("%d", wu.Device.UserGroupID),
-				Name: wu.Device.UserGroup.Name,
-			},
-		},
-	}
-}
-func processWeeklyData(data []*model.WaterUsage) []*model.DailyData {
-	dailyMap := make(map[string]*model.DailyData)
-
-	for _, entry := range data {
-		date := entry.RecordedAt.Format("2006-01-02")
-		if _, exists := dailyMap[date]; !exists {
-			dailyMap[date] = &model.DailyData{
-				Date: entry.RecordedAt.Format("Mon, 02 Jan"),
-			}
-		}
-		dailyMap[date].Hourly = append(dailyMap[date].Hourly, entry)
-		dailyMap[date].TotalUsage += entry.TotalUsage
-	}
-
-	var result []*model.DailyData
-	for _, day := range dailyMap {
-		day.AvgFlow = calculateAverageFlow(day.Hourly)
-		result = append(result, day)
-	}
-
-	sort.Slice(result, func(i, j int) bool {
-		t1, _ := time.Parse("2006-01-02", result[i].Date)
-		t2, _ := time.Parse("2006-01-02", result[j].Date)
-		return t1.Before(t2)
-	})
-
-	return result
-}
-func processMonthlyData(data []*model.WaterUsage) *model.MonthlyData {
-	monthly := &model.MonthlyData{
-		Month: data[0].RecordedAt.Format("January 2006"),
-	}
-	dailyMap := make(map[string]*model.DailyData)
-
-	for _, entry := range data {
-		date := entry.RecordedAt.Format("2006-01-02")
-		if _, exists := dailyMap[date]; !exists {
-			dailyMap[date] = &model.DailyData{
-				Date: entry.RecordedAt.Format("02 Jan"),
-			}
-		}
-		dailyMap[date].Hourly = append(dailyMap[date].Hourly, entry)
-		dailyMap[date].TotalUsage += entry.TotalUsage
-		monthly.TotalUsage += entry.TotalUsage
-	}
-
-	var days []*model.DailyData
-	for _, day := range dailyMap {
-		day.AvgFlow = calculateAverageFlow(day.Hourly)
-		days = append(days, day)
-	}
-	monthly.Days = days
-	monthly.AvgFlow = calculateAverageFlow(data)
-
-	return monthly
-}
-func processYearlyData(data []*model.WaterUsage) *model.YearlyData {
-	yearly := &model.YearlyData{
-		Year: data[0].RecordedAt.Format("2006"),
-	}
-	monthlyMap := make(map[string]*model.MonthlyData)
-
-	for _, entry := range data {
-		monthKey := entry.RecordedAt.Format("2006-01")
-		if _, exists := monthlyMap[monthKey]; !exists {
-			monthlyMap[monthKey] = &model.MonthlyData{
-				Month: entry.RecordedAt.Format("January"),
-			}
-		}
-		month := monthlyMap[monthKey]
-
-		date := entry.RecordedAt.Format("2006-01-02")
-		var day *model.DailyData
-		for _, d := range month.Days {
-			if d.Date == date {
-				day = d
-				break
-			}
-		}
-		if day == nil {
-			day = &model.DailyData{Date: entry.RecordedAt.Format("02 Jan")}
-			month.Days = append(month.Days, day)
-		}
-		day.Hourly = append(day.Hourly, entry)
-		day.TotalUsage += entry.TotalUsage
-		day.AvgFlow = calculateAverageFlow(day.Hourly)
-		month.TotalUsage += entry.TotalUsage
-		yearly.TotalUsage += entry.TotalUsage
-	}
-
-	var months []*model.MonthlyData
-	for _, month := range monthlyMap {
-		month.AvgFlow = calculateAverageFlowForMonth(month.Days)
-		months = append(months, month)
-	}
-	yearly.Months = months
-	yearly.AvgFlow = calculateAverageFlow(data)
-
-	return yearly
-}
-func calculateAverageFlow(entries []*model.WaterUsage) float64 {
-	total := 0.0
-	for _, entry := range entries {
-		total += entry.FlowRate
-	}
-	if len(entries) == 0 {
-		return 0
-	}
-	return total / float64(len(entries))
-}
-func calculateAverageFlowForMonth(days []*model.DailyData) float64 {
-	total := 0.0
-	count := 0
-	for _, day := range days {
-		total += day.AvgFlow
-		count++
-	}
-	if count == 0 {
-		return 0
-	}
-	return total / float64(count)
-}

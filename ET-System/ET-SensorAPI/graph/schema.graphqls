@@ -1,22 +1,29 @@
 scalar Time
 
-type User {
-  id: ID!
-  email: String!
-  displayName: String
-  verified: Boolean!
-  createdAt: Time!
-  groups: [UserGroup!]!
-}
+  type User {
+    id: ID!
+    email: String!
+    displayName: String
+    verified: Boolean!
+    createdAt: Time!
+    memberships: [UserGroupMember!]!
+  }
 
-type UserGroup {
-  id: ID!
-  name: String!
-  createdAt: Time!
-  devices: [Device!]!
-  users: [User!]!
-  location: [String!]!
-}
+  type UserGroup {
+    id: ID!
+    name: String!
+    createdAt: Time!
+    devices: [Device!]!
+    users: [UserGroupMember!]!
+    location: [String!]!
+  }
+
+  type UserGroupMember {
+    user: User!
+    group: UserGroup!
+    isAdmin: Boolean!
+    createdAt: Time!
+  }
 
 type Device {
   id: ID!
@@ -108,6 +115,7 @@ type Query {
   waterUsages: [WaterUsage!]!
   waterUsagesData(deviceId: String!, timeFilter: String!): WaterData!
   deepSeekAnalysis(userID: Int!): DeepSeekResponse
+  groupAiAnalysis(groupID: Int!): DeepSeekResponse
   notifications: [Notification!]!
 }
 
@@ -127,4 +135,5 @@ type Mutation {
   addLocation(groupId: Int!, locationName: String!): String
   removeDevice(groupId: Int!, deviceId: String!): String
   checkUsageNotifications: Boolean!
+  editMember(groupId: Int!, changedUserID: Int!, action: String!): String
 }
