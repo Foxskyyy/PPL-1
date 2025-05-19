@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:front_end/homepage.dart';
+import 'package:front_end/homepage/homepage.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
@@ -25,7 +25,7 @@ class _VerificationCodePageState extends State<VerificationCodePage> {
   );
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
-  final String apiUrl = "https://api.interphaselabs.com/graphql/query";
+  final String apiUrl = "http://api-ecotrack.interphaselabs.com/graphql/query";
 
   int _resendCountdown = 0;
   Timer? _timer;

@@ -68,7 +68,9 @@ class _AddMemberPageState extends State<AddMemberPage> {
       isCheckingGroupUsers = true;
     });
 
-    const String apiUrl = 'https://api.interphaselabs.com/graphql/query';
+    const String apiUrl =
+        'http://api-ecotrack.interphaselabs.com/graphql/query';
+
     final String query = '''
       query {
         userGroup(id: $_parsedGroupId) {
@@ -310,7 +312,9 @@ class _AddMemberPageState extends State<AddMemberPage> {
       errorMessage = null; // Clear previous error messages
     });
 
-    const String apiUrl = 'https://api.interphaselabs.com/graphql/query';
+    const String apiUrl =
+        'http://api-ecotrack.interphaselabs.com/graphql/query';
+
     final String query = '''
       mutation {
         assignUserToGroup(senderEmail: "${UserSession.email}", receiverEmail: "$email", userGroupID: $_parsedGroupId)

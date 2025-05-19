@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:front_end/homepage.dart';
+import 'package:front_end/homepage/homepage.dart';
 import 'package:front_end/alert_page.dart';
 import 'package:front_end/settings/settings_page.dart';
 import 'package:front_end/tracking/tracking_page.dart';

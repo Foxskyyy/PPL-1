@@ -38,7 +38,8 @@ class _LiveTrackingPlacePageState extends State<LiveTrackingPlacePage> {
   }
 
   Future<void> fetchWaterUsageData() async {
-    const String apiUrl = 'https://api.interphaselabs.com/graphql/query';
+    const String apiUrl =
+        'http://api-ecotrack.interphaselabs.com/graphql/query';
 
     final String query = '''
       {

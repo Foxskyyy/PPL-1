@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:front_end/login/login.dart';
-import 'package:front_end/homepage.dart';
+import 'package:front_end/homepage/homepage.dart';
 import 'package:front_end/user_session.dart';
 import 'package:front_end/settings/viewprofile/nickname_notifier.dart';
 

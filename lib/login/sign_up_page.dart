@@ -69,7 +69,7 @@ class _SignUpPageState extends State<SignUpPage> {
     _showLoading(true);
 
     try {
-      const String apiUrl = 'https://api.interphaselabs.com/graphql/query';
+      const String apiUrl = 'http://api-ecotrack.interphaselabs.com/graphql/query';
 
       final mutation = '''
         mutation Register(\$displayName: String!, \$email: String!, \$password: String!) {

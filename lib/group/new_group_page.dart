@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:front_end/custom_button_navbar.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:front_end/user_session.dart'; // For accessing userID
+import 'package:front_end/user_session.dart';
+import 'package:front_end/group/group_page.dart';
 
 class NewGroupPage extends StatefulWidget {
   const NewGroupPage({super.key, required int userID});
@@ -13,27 +14,14 @@ class NewGroupPage extends StatefulWidget {
 
 class _NewGroupPageState extends State<NewGroupPage> {
   final TextEditingController _groupNameController = TextEditingController();
-  final TextEditingController _groupDescController = TextEditingController();
-  final TextEditingController _searchController = TextEditingController();
 
-  final List<Map<String, String>> members = [
-    {'name': 'M. Is\'Ad Prabaswara', 'status': ''},
-    {'name': 'Daffa Burane Nugraha', 'status': ''},
-    {'name': 'Tabina Adelia Rafa', 'status': ''},
-    {'name': 'Shervina Ananda H.', 'status': ''},
-  ];
-
-  // Toggle the add member status
-  void _toggleAddMember(int index) {
-    setState(() {
-      members[index]['status'] =
-          members[index]['status'] == 'Added' ? '' : 'Added';
-    });
-  }
-
-  // Create a new group
   Future<void> _createGroup() async {
     final String groupName = _groupNameController.text.trim();
+    int? userID = await UserSession.getUserID();
+
+    print('[DEBUG] userID: $userID');
+    print('[DEBUG] groupName: $groupName');
+
     if (groupName.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -41,9 +29,6 @@ class _NewGroupPageState extends State<NewGroupPage> {
       return;
     }
 
-    // Get the userID from UserSession
-    int? userID = UserSession.userID; // Getting from UserSession directly
-    // Check if the userID is valid
     if (userID == null) {
       ScaffoldMessenger.of(
         context,
@@ -51,10 +36,12 @@ class _NewGroupPageState extends State<NewGroupPage> {
       return;
     }
 
-    const String apiUrl = 'https://api.interphaselabs.com/graphql/query';
-    const String mutation = '''
-      mutation CreateGroup(\$userID: Int!, \$groupName: String!) {
-        createUserGroup(userID: \$userID, groupName: \$groupName) {
+    final String apiUrl =
+        'http://api-ecotrack.interphaselabs.com/graphql/query';
+
+    final String mutation = '''
+      mutation {
+        createUserGroup(userID: $userID, groupName: "$groupName") {
           id
           name
         }
@@ -64,14 +51,10 @@ class _NewGroupPageState extends State<NewGroupPage> {
     final response = await http.post(
       Uri.parse(apiUrl),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'query': mutation,
-        'variables': {
-          'userID': userID, // Pass the userID here from UserSession
-          'groupName': groupName,
-        },
-      }),
+      body: jsonEncode({'query': mutation}),
     );
+
+    print('[DEBUG] Response: ${response.body}');
 
     final data = jsonDecode(response.body);
     if (data['errors'] != null) {
@@ -80,58 +63,24 @@ class _NewGroupPageState extends State<NewGroupPage> {
         context,
       ).showSnackBar(SnackBar(content: Text("Error: $error")));
     } else {
-      final groupId = data['data']['createUserGroup']['id'];
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Group created successfully!")),
       );
 
-      // Now, add members to the group
-      List<String> memberIds = [];
-      for (var member in members) {
-        if (member['status'] == 'Added') {
-          memberIds.add(member['name']!); // Assuming you have the user IDs
-        }
-      }
+      final createdGroup = data['data']['createUserGroup'];
+      final groupId = createdGroup['id'].toString();
+      final groupName = createdGroup['name'];
 
-      _addMembersToGroup(groupId, memberIds);
-
-      Navigator.pop(context);
-    }
-  }
-
-  // Function to add members to the group
-  Future<void> _addMembersToGroup(
-    String groupId,
-    List<String> memberIds,
-  ) async {
-    const String apiUrl = 'https://api.interphaselabs.com/graphql/query';
-    const String mutation = '''
-      mutation AddMembersToGroup(\$groupId: String!, \$memberIds: [String!]!) {
-        addMembersToGroup(groupId: \$groupId, memberIds: \$memberIds) {
-          id
-          name
-        }
-      }
-    ''';
-
-    final response = await http.post(
-      Uri.parse(apiUrl),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'query': mutation,
-        'variables': {'groupId': groupId, 'memberIds': memberIds},
-      }),
-    );
-
-    final data = jsonDecode(response.body);
-    if (data['errors'] != null) {
-      final error = data['errors'][0]['message'];
-      ScaffoldMessenger.of(
+      Navigator.pushReplacement(
         context,
-      ).showSnackBar(SnackBar(content: Text("Error: $error")));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Members added successfully!")),
+        MaterialPageRoute(
+          builder:
+              (_) => GroupPage(
+                groupId: groupId,
+                groupName: groupName,
+                groupDescription: '',
+              ),
+        ),
       );
     }
   }
@@ -148,34 +97,6 @@ class _NewGroupPageState extends State<NewGroupPage> {
             _buildBackButton(),
             _buildGroupInfoInput(),
             const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: _inputField(
-                _searchController,
-                'Search for people to add',
-                isSearch: true,
-              ),
-            ),
-            const SizedBox(height: 15),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20.0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Select Members:',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: ListView.builder(
-                itemCount: members.length,
-                itemBuilder: (context, index) {
-                  return _buildMemberRow(index);
-                },
-              ),
-            ),
             _buildActionButtons(),
           ],
         ),
@@ -234,11 +155,7 @@ class _NewGroupPageState extends State<NewGroupPage> {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _inputField(_groupNameController, 'Group Name'),
-                const SizedBox(height: 12),
-                _inputField(_groupDescController, 'Desc'),
-              ],
+              children: [_inputField(_groupNameController, 'Group Name')],
             ),
           ),
         ],
@@ -299,50 +216,9 @@ class _NewGroupPageState extends State<NewGroupPage> {
     );
   }
 
-  Widget _buildMemberRow(int index) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 20),
-      child: Row(
-        children: [
-          const CircleAvatar(
-            backgroundColor: Colors.blue,
-            radius: 22,
-            child: Icon(Icons.person, color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              members[index]['name']!,
-              style: const TextStyle(fontSize: 16),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => _toggleAddMember(index),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4CAF50),
-              minimumSize: const Size(80, 40),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(
-              members[index]['status'] == 'Added' ? 'Added' : 'Add',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   void dispose() {
     _groupNameController.dispose();
-    _groupDescController.dispose();
-    _searchController.dispose();
     super.dispose();
   }
 }

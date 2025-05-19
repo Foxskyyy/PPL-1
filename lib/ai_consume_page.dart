@@ -15,7 +15,7 @@ class _AIConsumePageState extends State<AIConsumePage> {
   bool _isLoading = false;
   String _suggestion = "Gagal memuat data analisis. Silakan coba lagi nanti.";
 
-  final String _apiUrl = "https://api.interphaselabs.com/graphql/query";
+  final String _apiUrl = "http://api-ecotrack.interphaselabs.com/graphql/query";
 
   @override
   void initState() {

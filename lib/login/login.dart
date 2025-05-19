@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:front_end/homepage.dart';
+import 'package:front_end/homepage/homepage.dart';
 import 'package:front_end/login/forgot_password_page.dart';
 import 'package:front_end/settings/viewprofile/nickname_notifier.dart';
 import 'package:front_end/user_session.dart';
@@ -23,7 +23,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _obscurePassword = true;
   bool _isLoading = false;
 
-  final String apiUrl = 'https://api.interphaselabs.com/graphql/query';
+  final String apiUrl = 'http://api-ecotrack.interphaselabs.com/graphql/query';
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -126,7 +126,6 @@ class _LoginPageState extends State<LoginPage> {
 
       final googleAuth = await googleUser.authentication;
 
-      // Kirim idToken ke backend pakai mutation oauthLogin
       const oauthLoginMutation = '''
         mutation OAuthLogin(\$provider: OAuthProvider!, \$token: String!) {
           oauthLogin(provider: \$provider, token: \$token) {
@@ -180,39 +179,16 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Column(
-            children: [
-              const SizedBox(height: 40),
-              Image.asset(
-                'assets/images/ecotrack_logo.png',
-                width: 240,
-                height: 240,
-              ),
-              const SizedBox(height: 10),
-              _buildTextField(
-                _emailController,
-                'Email',
-                TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 20),
-              _buildPasswordField(),
-              const SizedBox(height: 30),
-              _buildLoginButton(),
-              const SizedBox(height: 15),
-              _buildNavigationOptions(),
-              const SizedBox(height: 30),
-              _buildSocialButtons(),
-            ],
-          ),
+  Widget _buildLogoAndTitle() {
+    return Column(
+      children: [
+        Image.asset('assets/images/ecotrack_logo.png', width: 100, height: 100),
+        const SizedBox(height: 10),
+        const Text(
+          'Ecotrack',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
-      ),
+      ],
     );
   }
 
@@ -253,7 +229,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildLoginButton() {
+  Widget _buildSignInButton() {
     return SizedBox(
       width: double.infinity,
       height: 55,
@@ -264,12 +240,13 @@ class _LoginPageState extends State<LoginPage> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(30),
           ),
+          elevation: 4,
         ),
         child:
             _isLoading
                 ? const CircularProgressIndicator(color: Colors.white)
                 : const Text(
-                  'Log In',
+                  'Sign In',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -280,7 +257,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildNavigationOptions() {
+  Widget _buildAuthLinks() {
     return Column(
       children: [
         Row(
@@ -298,7 +275,7 @@ class _LoginPageState extends State<LoginPage> {
               child: const Text(
                 "Click Here",
                 style: TextStyle(
-                  color: Color(0xFFFF6347),
+                  color: Colors.orange,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -319,32 +296,49 @@ class _LoginPageState extends State<LoginPage> {
               child: const Text(
                 "Sign Up",
                 style: TextStyle(
-                  color: Color(0xFFFF6347),
+                  color: Colors.orange,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: signInWithGoogle,
+          child: const Text(
+            "Sign In With Google Instead",
+            style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildSocialButtons() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        GestureDetector(
-          onTap: signInWithGoogle,
-          child: Image.asset(
-            'assets/images/google_logo.png',
-            width: 40,
-            height: 40,
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(height: 40),
+              _buildLogoAndTitle(),
+              const SizedBox(height: 40),
+              _buildTextField(_emailController, 'Username', TextInputType.text),
+              const SizedBox(height: 20),
+              _buildPasswordField(),
+              const SizedBox(height: 30),
+              _buildSignInButton(),
+              const SizedBox(height: 25),
+              _buildAuthLinks(),
+            ],
           ),
         ),
-        const SizedBox(width: 24),
-        const Icon(Icons.apple, size: 36, color: Colors.black),
-      ],
+      ),
     );
   }
 

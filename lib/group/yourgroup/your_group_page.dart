@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:front_end/custom_button_navbar.dart';
-import 'package:front_end/group/yourgroup/group_member.dart'; // Ensure importing GroupMemberPage
+import 'package:front_end/group/yourgroup/group_member.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:front_end/user_session.dart'; // For accessing userID
+import 'package:front_end/user_session.dart';
 
 class YourGroupPage extends StatefulWidget {
   const YourGroupPage({super.key});
@@ -22,70 +22,60 @@ class _YourGroupPageState extends State<YourGroupPage> {
     fetchGroups();
   }
 
-  // Function to fetch groups from API
   Future<void> fetchGroups() async {
     const String apiUrl =
-        'https://api.interphaselabs.com/graphql/query'; // Use /query for GraphQL
+        'http://api-ecotrack.interphaselabs.com/graphql/query';
 
-    // Query that fetches group name and associated users
     const String query = '''
-      { 
-        userGroups {
-          id
-          name
-          users {
+    {
+      userGroups {
+        id
+        name
+        users {
+          user {
             id
+            email
           }
         }
       }
+    }
     ''';
-
-    final Uri url = Uri.parse('$apiUrl?query=${Uri.encodeComponent(query)}');
 
     try {
       final response = await http.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          // If authentication is needed
-          // 'Authorization': 'Bearer ${UserSession.token}',
-        },
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'query': query}),
       );
 
-      // Debugging: check statusCode and response.body
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
+      print('[DEBUG] Response status: ${response.statusCode}');
+      print('[DEBUG] Response body: ${response.body}');
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
 
-        // Check if the response contains valid data
-        if (result.containsKey('data') &&
-            result['data'].containsKey('userGroups')) {
+        if (result['data'] != null && result['data']['userGroups'] != null) {
           final List<dynamic> userGroups = result['data']['userGroups'];
 
-          // Get userID from session
-          int? currentUserId =
-              UserSession.userID; // Ensure the userID is available
+          final int? currentUserId = await UserSession.getUserID();
+          print('[DEBUG] Current User ID: $currentUserId');
 
-          // Check if currentUserId is available
           if (currentUserId == null) {
             setState(() {
               groups = [];
               isLoading = false;
             });
-            return; // Exit early if userID is not found
+            return;
           }
 
-          // Filter groups based on userID
           final filteredGroups =
               userGroups
                   .where((group) {
-                    final users = group['users'] as List<dynamic>;
+                    final List<dynamic> users = group['users'];
                     return users.any(
-                      (user) =>
-                          user['id'].toString() == currentUserId.toString(),
+                      (ugm) =>
+                          ugm['user']['id'].toString() ==
+                          currentUserId.toString(),
                     );
                   })
                   .map((group) {
@@ -96,30 +86,28 @@ class _YourGroupPageState extends State<YourGroupPage> {
                   })
                   .toList();
 
-          print(
-            'Filtered Groups: $filteredGroups',
-          ); // Debugging: check the filtered data
+          print('[DEBUG] Filtered Groups: $filteredGroups');
 
           setState(() {
             groups = filteredGroups;
             isLoading = false;
           });
         } else {
-          print('Invalid response structure: $result');
+          print('[ERROR] Invalid response structure');
           setState(() {
             groups = [];
             isLoading = false;
           });
         }
       } else {
-        print('Error fetching data: ${response.statusCode}, ${response.body}');
+        print('[ERROR] HTTP ${response.statusCode}: ${response.body}');
         setState(() {
           groups = [];
           isLoading = false;
         });
       }
     } catch (e) {
-      print('Error: $e');
+      print('[ERROR] Exception: $e');
       setState(() {
         groups = [];
         isLoading = false;
@@ -134,7 +122,6 @@ class _YourGroupPageState extends State<YourGroupPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 20.0,
@@ -156,9 +143,7 @@ class _YourGroupPageState extends State<YourGroupPage> {
                 ],
               ),
             ),
-            // Divider
             const Divider(color: Colors.black),
-            // Title and Back Button
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Row(
@@ -180,7 +165,6 @@ class _YourGroupPageState extends State<YourGroupPage> {
                     ),
                   ),
                   const Spacer(),
-                  // Remove the 'Create Group' button if not needed
                 ],
               ),
             ),
@@ -195,7 +179,6 @@ class _YourGroupPageState extends State<YourGroupPage> {
               ),
             ),
             const SizedBox(height: 10),
-            // Group List
             Expanded(
               child:
                   isLoading
@@ -208,17 +191,14 @@ class _YourGroupPageState extends State<YourGroupPage> {
                           return _GroupItem(
                             name: groups[index]['name'],
                             onTap: () {
-                              // Navigate to GroupDetailPage when group is tapped
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder:
-                                      (context) => GroupDetailPage(
+                                      (_) => GroupDetailPage(
                                         groupName: groups[index]['name'],
-                                        groupDescription:
-                                            'Group description', // Adjust description if needed
-                                        groupId:
-                                            groups[index]['groupId'], // Pass groupId for the detail page
+                                        groupDescription: 'Group description',
+                                        groupId: groups[index]['groupId'],
                                       ),
                                 ),
                               );
@@ -249,6 +229,7 @@ class _GroupItem extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border.all(color: Colors.grey.shade300),
           borderRadius: BorderRadius.circular(16),
+          color: Colors.white,
           boxShadow: [
             BoxShadow(
               color: Colors.grey.shade100,
@@ -256,7 +237,6 @@ class _GroupItem extends StatelessWidget {
               offset: const Offset(0, 2),
             ),
           ],
-          color: Colors.white,
         ),
         child: ListTile(
           contentPadding: const EdgeInsets.all(16),

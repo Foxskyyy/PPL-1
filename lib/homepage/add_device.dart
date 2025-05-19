@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:front_end/user_session.dart';
 
 class AddDevicePage extends StatefulWidget {
   const AddDevicePage({super.key});
@@ -13,9 +14,10 @@ class _AddDevicePageState extends State<AddDevicePage> {
   String deviceName = "";
   String? selectedLocation;
   int? selectedGroupId;
-
   bool isLoading = false;
+
   final String deviceId = "ET-d31e0e38-91bf-4b83-8439-1a7e72b1d8c4";
+  final String apiUrl = 'http://api-ecotrack.interphaselabs.com/graphql/query';
 
   List<Map<String, dynamic>> groups = [];
 
@@ -26,12 +28,22 @@ class _AddDevicePageState extends State<AddDevicePage> {
   }
 
   Future<void> fetchGroups() async {
-    const String apiUrl = 'https://api.interphaselabs.com/graphql/query';
+    final int? currentUserId = UserSession.userID;
+    if (currentUserId == null) {
+      print("❌ User ID is null. Cannot fetch groups.");
+      return;
+    }
+
     const String query = '''
       {
         userGroups {
           id
           name
+          users {
+            user {
+              id
+            }
+          }
         }
       }
     ''';
@@ -43,22 +55,33 @@ class _AddDevicePageState extends State<AddDevicePage> {
         body: jsonEncode({'query': query}),
       );
 
+      print('[DEBUG] Group Response: ${response.statusCode}');
+      print('[DEBUG] Group Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
         final List<dynamic> userGroups = result['data']['userGroups'];
 
+        final filteredGroups =
+            userGroups
+                .where((group) {
+                  final users = group['users'] as List<dynamic>;
+                  return users.any(
+                    (userGroupMember) =>
+                        userGroupMember['user']['id'].toString() ==
+                        currentUserId.toString(),
+                  );
+                })
+                .map((group) {
+                  return {
+                    'id': group['id'].toString(),
+                    'name': group['name'] ?? 'Unnamed Group',
+                  };
+                })
+                .toList();
+
         setState(() {
-          groups =
-              userGroups
-                  .map(
-                    (group) => {
-                      'id':
-                          group['id']
-                              .toString(), // pastikan ID disimpan sebagai String
-                      'name': group['name'],
-                    },
-                  )
-                  .toList();
+          groups = filteredGroups;
         });
       } else {
         print('Gagal ambil grup: ${response.statusCode}');
@@ -69,17 +92,12 @@ class _AddDevicePageState extends State<AddDevicePage> {
   }
 
   Future<void> saveDevice() async {
-    print("deviceName: $deviceName");
-    print("selectedGroupId: $selectedGroupId");
-    print("selectedLocation: $selectedLocation");
-
     if (deviceName.isNotEmpty &&
         selectedGroupId != null &&
         selectedLocation != null &&
         selectedLocation!.isNotEmpty) {
       setState(() => isLoading = true);
 
-      const String mutationUrl = 'https://api.interphaselabs.com/graphql/query';
       final String mutation = '''
         mutation AddDeviceToGroup {
           addDeviceToUserGroup(
@@ -96,7 +114,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
 
       try {
         final response = await http.post(
-          Uri.parse(mutationUrl),
+          Uri.parse(apiUrl),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'query': mutation}),
         );
@@ -162,7 +180,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
               ),
               const SizedBox(height: 20),
 
-              // Pilih Grup berdasarkan ID
+              // Pilih Grup
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: DropdownButtonFormField<int>(
@@ -175,9 +193,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
                       groups
                           .map<DropdownMenuItem<int>>(
                             (group) => DropdownMenuItem<int>(
-                              value: int.parse(
-                                group['id'],
-                              ), // ✅ FIX: konversi ke int
+                              value: int.parse(group['id']),
                               child: Text(group['name']),
                             ),
                           )
@@ -185,7 +201,6 @@ class _AddDevicePageState extends State<AddDevicePage> {
                   onChanged: (value) {
                     setState(() {
                       selectedGroupId = value;
-                      print('✅ selectedGroupId: $selectedGroupId');
                     });
                   },
                 ),
@@ -205,7 +220,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
               ),
               const SizedBox(height: 30),
 
-              // Tombol
+              // Tombol Aksi
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [

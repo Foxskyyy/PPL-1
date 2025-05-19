@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:front_end/custom_button_navbar.dart'; // Pastikan mengimpor CustomBottomNavBar
+import 'package:front_end/custom_button_navbar.dart';
 
 class JoinGroupPage extends StatefulWidget {
   const JoinGroupPage({super.key});
@@ -9,8 +9,7 @@ class JoinGroupPage extends StatefulWidget {
 }
 
 class _JoinGroupPageState extends State<JoinGroupPage> {
-  final TextEditingController _invitationCodeController =
-      TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -19,7 +18,7 @@ class _JoinGroupPageState extends State<JoinGroupPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header Section with Logo and Avatar
+            // Header logo + avatar
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: 20.0,
@@ -41,51 +40,62 @@ class _JoinGroupPageState extends State<JoinGroupPage> {
                 ],
               ),
             ),
-            // Divider below header
             const Divider(color: Colors.black),
-            // Button back
+            // Back Button
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.arrow_back, size: 20),
-                        SizedBox(width: 4),
-                      ],
-                    ),
-                  ),
-                ],
+              padding: const EdgeInsets.only(left: 20, top: 8),
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: const Row(
+                  children: [
+                    Icon(Icons.arrow_back, size: 20),
+                    SizedBox(width: 4),
+                    Text('Back', style: TextStyle(fontSize: 16)),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 1),
 
-            // Icon and Text for Join Group
-            Center(
-              child: Column(
-                children: [
-                  Image.asset(
-                    'assets/images/join_group_icon.png', // Gambar yang Anda kirimkan
-                    width: 200, // Ukuran gambar lebih kecil
-                    height: 200,
+            const SizedBox(height: 10),
+
+            // Icon + Title + Subtitle
+            Column(
+              children: [
+                Image.asset(
+                  'assets/images/join_group_icon.png', // ikon globe + people
+                  width: 180,
+                  height: 180,
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  "Add Member",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 40.0),
+                  child: Text(
+                    "Enter the email of the user you want to add to your group.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: Colors.black54),
                   ),
-                  const SizedBox(height: 10),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(height: 1),
 
-            // Invitation Code Input Field (TextField lebih kecil)
+            const SizedBox(height: 20),
+
+            // Email Input
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 40.0,
-              ), // Menambahkan padding untuk memperkecil ukuran
+              padding: const EdgeInsets.symmetric(horizontal: 40.0),
               child: TextField(
-                controller: _invitationCodeController,
+                controller: _emailController,
                 decoration: InputDecoration(
-                  hintText: 'Invitation Code',
+                  hintText: 'Email Account',
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
@@ -95,55 +105,76 @@ class _JoinGroupPageState extends State<JoinGroupPage> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
 
-            // Cancel and Join buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context); // Kembali ke halaman sebelumnya
-                  },
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    // Handle Join Group functionality
-                    final invitationCode = _invitationCodeController.text;
-                    if (invitationCode.isNotEmpty) {
-                      print('Joining group with code: $invitationCode');
-                      // Implement actual logic for joining the group with invitation code
-                      Navigator.pop(
-                        context,
-                      ); // Kembali setelah bergabung dengan grup
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please enter an invitation code'),
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 30,
-                      vertical: 16,
+            const SizedBox(height: 30),
+
+            // Buttons aligned horizontally
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Cancel Button (abu-abu gelap dengan teks ungu)
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF5C5C5C), // Dark grey
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 4,
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                    child: const Text(
+                      "Cancel",
+                      style: TextStyle(
+                        color: Color(0xFF6955C6), // Purple text
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Join',
-                    style: TextStyle(color: Colors.white),
+                  const SizedBox(width: 16),
+                  // Add Button
+                  ElevatedButton(
+                    onPressed: () {
+                      final email = _emailController.text.trim();
+                      if (email.isNotEmpty) {
+                        print('Adding user with email: $email');
+                        // Implement logic here
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Please enter an email address'),
+                          ),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 30,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 4,
+                    ),
+                    child: const Text(
+                      "Add",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:front_end/custom_button_navbar.dart';
+import 'package:front_end/tracking/consumption_tracking/consumption_tracking_week_page.dart.dart';
 import 'package:front_end/tracking/waterbreakdown/water_breakdown_page.dart';
-import 'package:front_end/tracking/consumption_tracking_page.dart';
 import 'package:front_end/tracking/live_tracking/live_tracking_page.dart';
 
 class TrackingPage extends StatelessWidget {
@@ -66,7 +66,8 @@ class TrackingPage extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const ConsumptionTrackingPage(),
+                          builder:
+                              (context) => const ConsumptionTrackingWeekPage(),
                         ),
                       );
                     },
@@ -90,8 +91,6 @@ class TrackingPage extends StatelessWidget {
           ],
         ),
       ),
-
-      // Bottom Nav
       bottomNavigationBar: const CustomBottomNavBar(currentIndex: 0),
     );
   }

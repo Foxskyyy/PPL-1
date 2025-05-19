@@ -23,22 +23,26 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
   }
 
   Future<void> fetchGroups() async {
-    const String apiUrl = 'https://api.interphaselabs.com/graphql/query';
+    const String apiUrl =
+        'http://api-ecotrack.interphaselabs.com/graphql/query';
+
     const String query = '''
-      {
-        userGroups {
+    {
+      userGroups {
+        id
+        name
+        devices {
           id
           name
-          devices {
-            id
-            name
-          }
-          users {
+        }
+        users {
+          user {
             id
           }
         }
       }
-    '''; // Update query to get devices as well
+    }
+    ''';
 
     try {
       final response = await http.post(
@@ -57,16 +61,18 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
                 .where((group) {
                   final users = group['users'] as List<dynamic>;
                   return users.any(
-                    (user) => user['id'].toString() == currentUserId.toString(),
+                    (userEntry) =>
+                        userEntry['user']['id'].toString() ==
+                        currentUserId.toString(),
                   );
                 })
-                .map(
-                  (group) => {
+                .map((group) {
+                  return {
                     'name': group['name'] ?? 'Unnamed Group',
                     'id': group['id'].toString(),
-                    'devices': group['devices'] ?? [], // Get devices here
-                  },
-                )
+                    'devices': group['devices'] ?? [],
+                  };
+                })
                 .toList();
 
         setState(() {
@@ -149,11 +155,9 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
                             child: _GroupCard(
                               title: group['name'],
                               onTap: () {
-                                // Get the deviceId from the first device in the group
                                 final devices = group['devices'] ?? [];
                                 if (devices.isNotEmpty) {
-                                  final device =
-                                      devices.first; // Get the first device
+                                  final device = devices.first;
                                   final deviceId = device['id'];
 
                                   Navigator.push(
@@ -162,18 +166,14 @@ class _LiveTrackingPageState extends State<LiveTrackingPage> {
                                       builder:
                                           (context) => LiveTrackingPlacePage(
                                             placeName: group['name'],
-                                            room: '', // Set room if needed
-                                            currentUsage:
-                                                0.0, // Set currentUsage if needed
-                                            groupId: int.parse(
-                                              group['id'],
-                                            ), // Group ID as int
-                                            deviceId: deviceId, // Pass deviceId
+                                            room: '',
+                                            currentUsage: 0.0,
+                                            groupId: int.parse(group['id']),
+                                            deviceId: deviceId,
                                           ),
                                     ),
                                   );
                                 } else {
-                                  // Handle case where there are no devices in the group
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
                                       content: Text(
