@@ -37,13 +37,11 @@ func (r *mutationResolver) Login(ctx context.Context, email string, password str
 		return nil, errors.New("failed to generate verification token")
 	}
 
-	if !user.Verified {
-		if err := utils.SendVerificationEmail(email, code); err != nil {
-			return nil, errors.New("failed to send verification email")
-		}
-		user.VerifyToken = code
+	if err := utils.SendVerificationEmail(email, code); err != nil {
+		return nil, errors.New("failed to send verification email")
 	}
-
+	
+	user.VerifyToken = code
 	user.RefreshToken = token
 
 	if err := config.DB.Save(&user).Error; err != nil {
@@ -179,10 +177,6 @@ func (r *mutationResolver) ResendVerificationEmail(ctx context.Context, email st
 	user, err := utils.GetUserByEmail(email)
 	if err != nil {
 		return nil, errors.New("user not found")
-	}
-
-	if user.Verified {
-		return nil, errors.New("email is already verified")
 	}
 
 	accessToken, _ := utils.GenerateOTP()
