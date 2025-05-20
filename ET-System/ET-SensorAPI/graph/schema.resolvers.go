@@ -681,8 +681,7 @@ func (r *mutationResolver) CheckUsageNotifications(ctx context.Context) (bool, e
 
 // EditMember is the resolver for the editMember field.
 func (r *mutationResolver) EditMember(ctx context.Context, groupID int32, changedUserID int32, action string) (*string, error) {
-	var userMember model.UserGroupMember
-	var userGroup model.UserGroup
+	var group models.UserGroup
 
 	tx := config.DB.Begin()
 	defer func() {
@@ -693,44 +692,45 @@ func (r *mutationResolver) EditMember(ctx context.Context, groupID int32, change
 
 	if err := tx.Set("gorm:query_option", "FOR UPDATE").
 		Where("id = ?", groupID).
-		First(&userGroup).Error; err != nil {
+		First(&group).Error; err != nil {
 		tx.Rollback()
 		return nil, fmt.Errorf("group not found: %w", err)
 	}
 
-	if err := tx.Where("user_id = ? AND user_group_id = ?", changedUserID, groupID).First(&userMember).Error; err != nil {
+	var membership models.UserGroupMember
+	if err := tx.Debug().Where("user_id = ? AND user_group_id = ?", changedUserID, groupID).First(&membership).Error; err != nil {
 		tx.Rollback()
 		return nil, fmt.Errorf("user not found in specified group")
 	}
 
-	if action == "REMOVE" {
-		if err := tx.Where("user_id = ? AND user_group_id = ?", changedUserID, groupID).Delete(&models.UserGroupMember{}).Error; err != nil {
+	switch action {
+	case "REMOVE":
+		if err := tx.Delete(&membership).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to remove user from group: %w", err)
 		}
-	}
-
-	if action == "ADMIN_PERMS" {
-		userMember.IsAdmin = true
-		if err := tx.Where("user_id = ? AND user_group_id = ?", changedUserID, groupID).Save(&models.UserGroupMember{}).Error; err != nil {
+	case "ADMIN_PERMS":
+		membership.IsAdmin = true
+		if err := tx.Save(&membership).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to update user permission: %w", err)
 		}
-	}
-
-	if action == "MEMBER_PERMS" {
-		userMember.IsAdmin = false
-		if err := tx.Where("user_id = ? AND user_group_id = ?", changedUserID, groupID).Save(&models.UserGroupMember{}).Error; err != nil {
+	case "MEMBER_PERMS":
+		membership.IsAdmin = false
+		if err := tx.Save(&membership).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to update user permission: %w", err)
 		}
+	default:
+		tx.Rollback()
+		return nil, fmt.Errorf("invalid action: %s", action)
 	}
 
 	if err := tx.Commit().Error; err != nil {
 		return nil, fmt.Errorf("transaction failed: %w", err)
 	}
 
-	successMessage := "User Updated successfully"
+	successMessage := "User updated successfully"
 	return &successMessage, nil
 }
 
