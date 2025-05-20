@@ -704,7 +704,7 @@ func (r *mutationResolver) EditMember(ctx context.Context, groupID int32, change
 	}
 
 	if action == "REMOVE" {
-		if err := tx.Where("user_id = ? AND user_group_id = ?", userMember, groupID).Delete(&models.UserGroupMember{}).Error; err != nil {
+		if err := tx.Where("user_id = ? AND user_group_id = ?", changedUserID, groupID).Delete(&models.UserGroupMember{}).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to remove user from group: %w", err)
 		}
@@ -712,7 +712,7 @@ func (r *mutationResolver) EditMember(ctx context.Context, groupID int32, change
 
 	if action == "ADMIN_PERMS" {
 		userMember.IsAdmin = true
-		if err := tx.Where("user_id = ? AND user_group_id = ?", userMember, groupID).Save(&models.UserGroupMember{}).Error; err != nil {
+		if err := tx.Where("user_id = ? AND user_group_id = ?", changedUserID, groupID).Save(&models.UserGroupMember{}).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to update user permission: %w", err)
 		}
@@ -720,7 +720,7 @@ func (r *mutationResolver) EditMember(ctx context.Context, groupID int32, change
 
 	if action == "MEMBER_PERMS" {
 		userMember.IsAdmin = false
-		if err := tx.Where("user_id = ? AND user_group_id = ?", userMember, groupID).Save(&models.UserGroupMember{}).Error; err != nil {
+		if err := tx.Where("user_id = ? AND user_group_id = ?", changedUserID, groupID).Save(&models.UserGroupMember{}).Error; err != nil {
 			tx.Rollback()
 			return nil, fmt.Errorf("failed to update user permission: %w", err)
 		}
