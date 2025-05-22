@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/smtp"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -128,4 +129,12 @@ func SendInvitationEmail(senderEmail string, receiverEmail string, groupName str
 
 	fmt.Println("Invitation Email Sent!")
 	return nil
+}
+
+func ValidateDeviceID(code string) bool {
+	if !strings.HasPrefix(code, "ET-") {
+
+		return false
+	}
+	return true
 }

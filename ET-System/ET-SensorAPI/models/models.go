@@ -80,7 +80,7 @@ type Notification struct {
 
 type DailyUsage struct {
 	ID         uint      `gorm:"primaryKey"`
-	DeviceID   string    `gorm:"index"`
+	DeviceID   string    `gorm:"foreignKey:DeviceID;references:ID;constraint:OnDelete:CASCADE"`
 	Date       time.Time `gorm:"type:date"`
 	TotalUsage float64
 	Notified   bool `gorm:"default:false"`

@@ -70,6 +70,7 @@ type Mutation struct {
 
 type Notification struct {
 	ID        string    `json:"id"`
+	Title     string    `json:"title"`
 	Device    *Device   `json:"device"`
 	Message   string    `json:"message"`
 	CreatedAt time.Time `json:"createdAt"`

@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -361,6 +362,10 @@ func (r *mutationResolver) CreateUserGroup(ctx context.Context, userID int32, gr
 func (r *mutationResolver) AddDeviceToUserGroup(ctx context.Context, deviceID string, deviceName string, userGroupID int32, location string) (*model.UserGroup, error) {
 	if deviceID == "" || deviceName == "" || userGroupID <= 0 {
 		return nil, errors.New("deviceID, deviceName, and userGroupID are required")
+	}
+
+	if utils.ValidateDeviceID(deviceID) == false {
+		return nil, errors.New("Device ID Tidak Valid")
 	}
 
 	tx := config.DB.Begin()
@@ -1060,23 +1065,97 @@ func (r *queryResolver) GroupAiAnalysis(ctx context.Context, groupID int32) (*mo
 
 // Notifications is the resolver for the notifications field.
 func (r *queryResolver) Notifications(ctx context.Context) ([]*model.Notification, error) {
-	var dbNotifications []models.Notification
+	var devices []models.Device
 	if err := config.DB.
-		Preload("Device").
-		Find(&dbNotifications).Error; err != nil {
+		Preload("UserGroup").
+		Find(&devices).Error; err != nil {
 		return nil, err
 	}
 
-	var result []*model.Notification
-	for _, n := range dbNotifications {
-		result = append(result, &model.Notification{
-			ID:        fmt.Sprintf("%d", n.ID),
-			Message:   n.Message,
-			CreatedAt: n.CreatedAt,
-			Device:    utils.ConvertToGQLDevice(n.Device),
+	now := time.Now()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	yesterdayStart := todayStart.Add(-24 * time.Hour)
+
+	var notifications []*model.Notification
+
+	for _, device := range devices {
+		var todayTotal float64
+		if err := config.DB.Model(&models.WaterUsage{}).
+			Select("COALESCE(SUM(total_usage), 0)").
+			Where("device_id = ? AND recorded_at >= ? AND recorded_at < ?",
+				device.ID,
+				todayStart,
+				todayStart.Add(24*time.Hour),
+			).
+			Scan(&todayTotal).Error; err != nil {
+			return nil, err
+		}
+
+		var yesterdayTotal float64
+		if err := config.DB.Model(&models.WaterUsage{}).
+			Select("COALESCE(SUM(total_usage), 0)").
+			Where("device_id = ? AND recorded_at >= ? AND recorded_at < ?",
+				device.ID,
+				yesterdayStart,
+				todayStart,
+			).
+			Scan(&yesterdayTotal).Error; err != nil {
+			return nil, err
+		}
+
+		if yesterdayTotal == 0 && todayTotal == 0 {
+			continue
+		}
+
+		groupName := device.UserGroup.Name
+		deviceName := device.Name
+		location := device.Location
+
+		var title string
+		var message string
+		change := todayTotal - yesterdayTotal
+
+		title = fmt.Sprintf("%s | %s | %s", groupName, deviceName, location)
+
+		var percentChange float64
+		if yesterdayTotal == 0 {
+			if todayTotal == 0 {
+				percentChange = 0
+			} else {
+				percentChange = 100
+			}
+		} else {
+			percentChange = (change / yesterdayTotal) * 100
+		}
+
+		if percentChange > 0 {
+			message = fmt.Sprintf(
+				"Penggunaan air meningkat sebesar %.2f%% (%.2fL → %.2fL). Coba periksa apakah ada keran yang lupa dimatikan atau penggunaan berlebih yang tidak biasa.",
+				percentChange,
+				yesterdayTotal,
+				todayTotal)
+		} else if percentChange < 0 {
+			message = fmt.Sprintf(
+				"Bagus! Penggunaan air menurun sebesar %.2f%% (%.2fL → %.2fL). Terus pertahankan kebiasaan hemat air!",
+				math.Abs(percentChange),
+				yesterdayTotal,
+				todayTotal)
+		} else {
+			message = fmt.Sprintf(
+				"Penggunaan air tetap sama (%.2fL) seperti kemarin. Stabil, tapi bisa lebih hemat lagi jika memungkinkan.",
+				todayTotal)
+		}
+
+		notifications = append(notifications, &model.Notification{
+			ID:        fmt.Sprintf("usage-%s-%d", device.ID, now.Unix()),
+			Title:     title,
+			Message:   message,
+			CreatedAt: time.Now(),
+			Device:    utils.ConvertToGQLDevice(device),
 		})
 	}
-	return result, nil
+
+	return notifications, nil
 }
 
 // Mutation returns MutationResolver implementation.
