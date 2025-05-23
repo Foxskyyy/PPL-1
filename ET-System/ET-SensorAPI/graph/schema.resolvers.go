@@ -41,7 +41,7 @@ func (r *mutationResolver) Login(ctx context.Context, email string, password str
 	if err := utils.SendVerificationEmail(email, code); err != nil {
 		return nil, errors.New("failed to send verification email")
 	}
-	
+
 	user.VerifyToken = code
 	user.RefreshToken = token
 
@@ -663,11 +663,6 @@ func (r *mutationResolver) RemoveDevice(ctx context.Context, groupID int32, devi
 	if err := tx.Delete(&device).Error; err != nil {
 		tx.Rollback()
 		return nil, fmt.Errorf("failed to delete device: %w", err)
-	}
-
-	if err := tx.Model(&group).Update("device_count", gorm.Expr("device_count - 1")).Error; err != nil {
-		tx.Rollback()
-		return nil, fmt.Errorf("failed to update group stats: %w", err)
 	}
 
 	if err := tx.Commit().Error; err != nil {
