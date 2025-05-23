@@ -3,7 +3,7 @@ import 'package:front_end/custom_button_navbar.dart';
 import 'package:front_end/homepage/device_list_page.dart';
 import 'package:front_end/group/yourgroup/your_group_page.dart';
 import 'package:front_end/user_session.dart';
-import 'package:front_end/ai_consume_page.dart';
+import 'package:front_end/ai_consume_user_page.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -250,7 +250,9 @@ class _HomePageState extends State<HomePage> {
                 onTap:
                     () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const AIConsumePage()),
+                      MaterialPageRoute(
+                        builder: (_) => const AIConsumeUserPage(),
+                      ),
                     ),
                 child: Container(
                   padding: const EdgeInsets.all(12),
