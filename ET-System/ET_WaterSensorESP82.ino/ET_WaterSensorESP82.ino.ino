@@ -3,6 +3,7 @@
 #define BLYNK_AUTH_TOKEN "tV9m1PYrBYdUqUKvCOmGvkGRhgcTxQR4"
 
 #include <ESP8266WiFi.h>
+#include <WiFiClientSecure.h>
 #include <ESP8266HTTPClient.h>
 #include <BlynkSimpleEsp8266.h>
 #include <time.h>
@@ -15,30 +16,28 @@ const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 7 * 3600;
 const int daylightOffset_sec = 0;
 
-// Use D5 (GPIO14) for YF-S401 signal
 #define SENSOR D5
 #define DEVICE_NAME "ET-bd7df152-d9c4-465c-ae54-714c8e7159a0"
 
 BlynkTimer timer;
 
+// Remove trailing slash from endpoint
 const char* serverName = "https://api-ecotrack.interphaselabs.com/api/v1/water-usage/";
 
-long currentMillis = 0;
+volatile byte pulseCount = 0;
+
 long previousMillis = 0;
-int interval = 1000;
-float calibrationFactor = 8;
-volatile byte pulseCount;
-byte pulse1Sec = 0;
-float flowRate;
-float flowMeterKubik;
-float totalMeterKubik;
-float flowLitres;
-float totalLitres;
-unsigned int cost;
+const int interval = 1000;
+
+float calibrationFactor = 8.0;
+float flowRate = 0.0;
+float totalLitres = 0.0;
+float totalMeterKubik = 0.0;
+unsigned int cost = 0;
 
 // Store previous values to avoid unnecessary API calls
-float prevFlowRate = 0;
-float prevTotalLitres = 0;
+float prevFlowRate = 0.0;
+float prevTotalLitres = 0.0;
 unsigned int prevCost = 0;
 
 void ICACHE_RAM_ATTR pulseCounter() {
@@ -46,34 +45,28 @@ void ICACHE_RAM_ATTR pulseCounter() {
 }
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   Serial.print("Connecting to WiFi network: ");
-  Serial.print(ssid);
+  Serial.println(ssid);
 
   WiFi.begin(ssid, pass);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\nSuccessfully connected to: ");
-  Serial.print(ssid);
-  Serial.print(" with IP address: ");
+  Serial.println("\nSuccessfully connected");
+  Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
   pinMode(SENSOR, INPUT_PULLUP);
-  Blynk.begin(auth, ssid, pass);
-  timer.setInterval(1000L, sendData);
-
-  pulseCount = 0;
-  flowRate = 0.0;
-  flowMeterKubik = 0.000;
-  totalMeterKubik = 0;
-  previousMillis = 0;
-  cost = 0;
-
   attachInterrupt(digitalPinToInterrupt(SENSOR), pulseCounter, FALLING);
+
+  Blynk.begin(auth, ssid, pass);
+  timer.setInterval(interval, sendData);
+
+  previousMillis = millis();
 }
 
 void loop() {
@@ -86,27 +79,34 @@ unsigned int roundToNearestHundred(unsigned int value) {
 }
 
 void sendData() {
-  currentMillis = millis();
+  unsigned long currentMillis = millis();
 
-  if (currentMillis - previousMillis > interval) {
-    pulse1Sec = pulseCount;
+  if (currentMillis - previousMillis >= interval) {
+    // Calculate flow rate
+    byte pulse1Sec = pulseCount;
     pulseCount = 0;
-    flowRate = ((1000.0 / (millis() - previousMillis)) * pulse1Sec) / calibrationFactor;
-    previousMillis = millis();
-    flowLitres = (flowRate / 60.0);
-    flowMeterKubik = flowLitres / 1000.0;
-    totalMeterKubik += flowMeterKubik;
+
+    unsigned long intervalMillis = currentMillis - previousMillis;
+    previousMillis = currentMillis;
+
+    if (intervalMillis == 0) return; // avoid division by zero
+
+    flowRate = ((1000.0 / intervalMillis) * pulse1Sec) / calibrationFactor;
+    float flowLitres = flowRate / 60.0;  // L/s to L/min
+    float flowMeterKubik = flowLitres / 1000.0;
+
     totalLitres += flowLitres;
+    totalMeterKubik += flowMeterKubik;
     cost = totalLitres * 1000;
 
     unsigned int roundedCost = roundToNearestHundred(cost);
 
-    if ((flowRate != prevFlowRate || totalLitres != prevTotalLitres || roundedCost != prevCost)) {
-      // Print Data to Serial Monitor
+    // Only send if values changed to avoid unnecessary POSTs
+    if (flowRate != prevFlowRate || totalLitres != prevTotalLitres || roundedCost != prevCost) {
       Serial.print("Flow rate: ");
       Serial.print(flowRate);
       Serial.print(" L/min\t");
-      Serial.print("Output: ");
+      Serial.print("Total: ");
       Serial.print(totalMeterKubik, 3);
       Serial.print(" M3 / ");
       Serial.print(totalLitres);
@@ -114,47 +114,57 @@ void sendData() {
       Serial.print("Cost: ");
       Serial.println(roundedCost);
 
-      // Send Data to Blynk
-      Blynk.virtualWrite(V0, String(flowRate));
-      Blynk.virtualWrite(V1, String(totalLitres));
-      Blynk.virtualWrite(V2, String(roundedCost));
+      // Send to Blynk app
+      Blynk.virtualWrite(V0, flowRate);
+      Blynk.virtualWrite(V1, totalLitres);
+      Blynk.virtualWrite(V2, roundedCost);
 
-      // Send Data to API
-      if (WiFi.status() == WL_CONNECTED && flowRate > 0.00) {
-        WiFiClient wifiClient;
+      // Send to API if connected and flowRate > 0
+      if (WiFi.status() == WL_CONNECTED && flowRate > 0.0) {
+        WiFiClientSecure wifiClient;
+        wifiClient.setInsecure(); // Use this if you do NOT need to check server certificate
+
         HTTPClient http;
-        http.begin(wifiClient, serverName);
-        http.addHeader("Content-Type", "application/json");
+        Serial.print("HTTP POST to: "); Serial.println(serverName);
 
-        time_t now = time(nullptr);
-        struct tm *timeinfo;
-        char timestamp[25];
-        timeinfo = localtime(&now);
-        strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", timeinfo);
+        if (http.begin(wifiClient, serverName)) {
+          http.addHeader("Content-Type", "application/json");
 
-        // Properly formatted JSON
-        String postData = "{";
-        postData += "\"device_id\": \"" + String(DEVICE_NAME) + "\",";
-        postData += "\"flow_rate\": " + String(flowRate, 2) + ",";
-        postData += "\"total_usage\": " + String(totalLitres, 2) + ",";
-        postData += "\"recorded_at\": \"" + String(timestamp) + "\"";
-        postData += "}";
+          // Get UTC time for timestamp
+          time_t now = time(nullptr);
+          struct tm* timeinfo = gmtime(&now);
+          char timestamp[25];
+          strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", timeinfo);
 
-        int httpResponseCode = http.POST(postData);
+          String postData = "{";
+          postData += "\"device_id\":\"" + String(DEVICE_NAME) + "\",";
+          postData += "\"flow_rate\":" + String(flowRate, 2) + ",";
+          postData += "\"total_usage\":" + String(totalLitres, 2) + ",";
+          postData += "\"recorded_at\":\"" + String(timestamp) + "\"";
+          postData += "}";
 
-        if (httpResponseCode > 0) {
-          Serial.print("Data sent! Response code: ");
-          Serial.println(httpResponseCode);
-          Serial.println("Sending JSON payload:");
+          Serial.print("Payload: ");
           Serial.println(postData);
-        } else {
-          Serial.print("Error sending data. HTTP response code: ");
-          Serial.println(httpResponseCode);
-        }
 
-        http.end();
+          int httpResponseCode = http.POST(postData);
+
+          Serial.print("HTTP Response code: ");
+          Serial.println(httpResponseCode);
+          Serial.print("HTTP Response body: ");
+          Serial.println(http.getString());
+
+          if (httpResponseCode > 0) {
+            Serial.println("Data sent successfully!");
+          } else {
+            Serial.println("Failed to send data.");
+          }
+
+          http.end();
+        } else {
+          Serial.println("Unable to connect to server");
+        }
       } else {
-        Serial.println("WiFi disconnected or flowRate=0. Cannot send data.");
+        Serial.println("WiFi disconnected or flowRate zero; skipping API send");
       }
 
       prevFlowRate = flowRate;

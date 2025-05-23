@@ -1053,10 +1053,23 @@ func (r *queryResolver) GroupAiAnalysis(ctx context.Context, groupID int32) (*mo
 }
 
 // Notifications is the resolver for the notifications field.
-func (r *queryResolver) Notifications(ctx context.Context) ([]*model.Notification, error) {
+func (r *queryResolver) Notifications(ctx context.Context, userId int32) ([]*model.Notification, error) {
+
+	var userGroupIDs []uint
+	if err := config.DB.Model(&models.UserGroupMember{}).
+		Where("user_id = ?", uint(userId)).
+		Pluck("user_group_id", &userGroupIDs).Error; err != nil {
+		return nil, err
+	}
+
+	if len(userGroupIDs) == 0 {
+		return []*model.Notification{}, nil
+	}
+
 	var devices []models.Device
 	if err := config.DB.
 		Preload("UserGroup").
+		Where("user_group_id IN ?", userGroupIDs).
 		Find(&devices).Error; err != nil {
 		return nil, err
 	}

@@ -127,7 +127,7 @@ type ComplexityRoot struct {
 		DeviceUsage      func(childComplexity int, groupID int32) int
 		Devices          func(childComplexity int) int
 		GroupAiAnalysis  func(childComplexity int, groupID int32) int
-		Notifications    func(childComplexity int) int
+		Notifications    func(childComplexity int, userID int32) int
 		UserGroups       func(childComplexity int) int
 		Users            func(childComplexity int) int
 		WaterUsages      func(childComplexity int) int
@@ -211,7 +211,7 @@ type QueryResolver interface {
 	WaterUsagesData(ctx context.Context, deviceID string, timeFilter string) (model.WaterData, error)
 	DeepSeekAnalysis(ctx context.Context, userID int32) (*model.DeepSeekResponse, error)
 	GroupAiAnalysis(ctx context.Context, groupID int32) (*model.DeepSeekResponse, error)
-	Notifications(ctx context.Context) ([]*model.Notification, error)
+	Notifications(ctx context.Context, userID int32) ([]*model.Notification, error)
 }
 
 type executableSchema struct {
@@ -664,7 +664,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			break
 		}
 
-		return e.complexity.Query.Notifications(childComplexity), true
+		args, err := ec.field_Query_notifications_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Notifications(childComplexity, args["userID"].(int32)), true
 
 	case "Query.userGroups":
 		if e.complexity.Query.UserGroups == nil {
@@ -1772,6 +1777,29 @@ func (ec *executionContext) field_Query_groupAiAnalysis_argsGroupID(
 ) (int32, error) {
 	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("groupID"))
 	if tmp, ok := rawArgs["groupID"]; ok {
+		return ec.unmarshalNInt2int32(ctx, tmp)
+	}
+
+	var zeroVal int32
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Query_notifications_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := ec.field_Query_notifications_argsUserID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["userID"] = arg0
+	return args, nil
+}
+func (ec *executionContext) field_Query_notifications_argsUserID(
+	ctx context.Context,
+	rawArgs map[string]any,
+) (int32, error) {
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("userID"))
+	if tmp, ok := rawArgs["userID"]; ok {
 		return ec.unmarshalNInt2int32(ctx, tmp)
 	}
 
@@ -4597,7 +4625,7 @@ func (ec *executionContext) _Query_notifications(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (any, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Notifications(rctx)
+		return ec.resolvers.Query().Notifications(rctx, fc.Args["userID"].(int32))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -4614,7 +4642,7 @@ func (ec *executionContext) _Query_notifications(ctx context.Context, field grap
 	return ec.marshalNNotification2ᚕᚖETᚑSensorAPIᚋgraphᚋmodelᚐNotificationᚄ(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) fieldContext_Query_notifications(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_notifications(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -4635,6 +4663,17 @@ func (ec *executionContext) fieldContext_Query_notifications(_ context.Context, 
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Notification", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_notifications_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }

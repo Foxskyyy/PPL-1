@@ -117,7 +117,7 @@ type Query {
   waterUsagesData(deviceId: String!, timeFilter: String!): WaterData!
   deepSeekAnalysis(userID: Int!): DeepSeekResponse
   groupAiAnalysis(groupID: Int!): DeepSeekResponse
-  notifications: [Notification!]!
+  notifications(userID: Int!): [Notification!]!
 }
 
 type Mutation {
