@@ -1,42 +1,94 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:front_end/custom_button_navbar.dart';
+import 'package:front_end/user_session.dart';
+import 'package:front_end/notification_service.dart';
 
 class AlertPage extends StatefulWidget {
+  const AlertPage({super.key});
+
   @override
   State<AlertPage> createState() => _AlertPageState();
 }
 
 class _AlertPageState extends State<AlertPage> {
-  int _currentIndex = 4;
+  final String apiUrl = 'http://api-ecotrack.interphaselabs.com/graphql/query';
+  String? _lastFetchedId;
 
   Future<List<Map<String, String>>> fetchAlertsFromBackend() async {
-    await Future.delayed(Duration(seconds: 1)); // Simulasi loading
-    return [
+    final int? userId = await UserSession.getUserID();
+
+    if (userId == null) {
+      print("❌ userID null, tidak bisa ambil notifikasi.");
+      return [];
+    }
+
+    final query = '''
       {
-        "title": "High Energy Consumption Alert!",
-        "message":
-            "Your energy usage has exceeded the safe limit. Consider reducing unnecessary usage to avoid waste and extra cost.",
-        "time": "6:52 PM",
-      },
-      {
-        "title": "Water Overuse Warning!",
-        "message":
-            "Your water consumption is above the recommended level. Please check for leaks and optimize usage to conserve resources.",
-        "time": "4:08 PM",
-      },
-      {
-        "title": "Material Usage Alert!",
-        "message":
-            "Your material consumption is exceeding the optimal threshold. Review your supply chain and consider waste reduction strategies.",
-        "time": "11:23 AM",
-      },
-      {
-        "title": "Material Consumption Warning!",
-        "message":
-            "Your resource usage is exceeding the optimal range. Review your processes to minimize waste and maintain efficiency.",
-        "time": "9:41 AM",
-      },
-    ];
+        notifications(userID: $userId) {
+          id
+          title
+          message
+          createdAt
+        }
+      }
+    ''';
+
+    try {
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'query': query}),
+      );
+
+      print("📤 Query sent:\n$query");
+      print("📥 Raw response:\n${response.body}");
+
+      final jsonData = json.decode(response.body);
+
+      if (jsonData['errors'] != null) {
+        print("❌ GraphQL Errors: ${jsonData['errors']}");
+        return [];
+      }
+
+      final notifications = jsonData['data']['notifications'] as List;
+      print("✅ Total Notifications: ${notifications.length}");
+
+      if (notifications.isNotEmpty) {
+        final latest = notifications.first;
+        final latestId = latest['id'];
+
+        if (_lastFetchedId != latestId) {
+          _lastFetchedId = latestId;
+          final titleParts = (latest['title'] ?? '').split(' | ');
+          final deviceName = titleParts.length > 1 ? titleParts[1] : 'Device';
+          final location = titleParts.length > 2 ? titleParts[2] : 'Lokasi';
+
+          await NotificationService.showWaterAlertNotification(
+            deviceName: deviceName,
+            location: location,
+            message: latest['message'] ?? 'Ada notifikasi baru.',
+          );
+        }
+      }
+
+      return notifications.map<Map<String, String>>((notif) {
+        return {
+          "title": notif['title'] ?? 'Notifikasi',
+          "message": notif['message'] ?? '',
+          "time": formatTime(notif['createdAt']),
+        };
+      }).toList();
+    } catch (e) {
+      print("🚨 Exception: $e");
+      return [];
+    }
+  }
+
+  String formatTime(String iso) {
+    final dt = DateTime.parse(iso).toLocal();
+    return "${dt.hour}:${dt.minute.toString().padLeft(2, '0')}";
   }
 
   @override
@@ -46,40 +98,22 @@ class _AlertPageState extends State<AlertPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 20.0,
-                vertical: 5,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Ecotrack Logo and Text
-                  Row(
-                    children: [
-                      Image.asset(
-                        'assets/images/ecotrack_logo.png',
-                        width: 60,
-                        height: 60,
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                  ),
-                  // Avatar
+                  Image.asset('assets/images/ecotrack_logo.png', width: 60),
                   const CircleAvatar(
                     backgroundColor: Colors.lightBlue,
                     radius: 18,
-                    child: Icon(Icons.person, color: Colors.white, size: 20),
+                    child: Icon(Icons.person, color: Colors.white),
                   ),
                 ],
               ),
             ),
+            const Divider(color: Colors.black),
 
-            // Divider
-            Container(height: 1, color: Colors.black),
-
-            // Alert List
             Expanded(
               child: FutureBuilder<List<Map<String, String>>>(
                 future: fetchAlertsFromBackend(),
@@ -90,19 +124,19 @@ class _AlertPageState extends State<AlertPage> {
 
                   final alerts = snapshot.data ?? [];
 
+                  if (alerts.isEmpty) {
+                    return const Center(
+                      child: Text("Tidak ada notifikasi tersedia."),
+                    );
+                  }
+
                   return ListView.builder(
                     itemCount: alerts.length,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.all(16),
                     itemBuilder: (context, index) {
                       final alert = alerts[index];
                       return Padding(
-                        padding: EdgeInsets.only(
-                          top:
-                              index == 0
-                                  ? 16.0
-                                  : 6.0, // 👉 jarak lebih besar hanya di atas item pertama
-                          bottom: 6.0,
-                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 6.0),
                         child: Container(
                           decoration: BoxDecoration(
                             color: Colors.grey.shade200,
@@ -133,10 +167,7 @@ class _AlertPageState extends State<AlertPage> {
                                 ],
                               ),
                               const SizedBox(height: 6),
-                              Text(
-                                alert['message'] ?? '',
-                                style: const TextStyle(fontSize: 13),
-                              ),
+                              Text(alert['message'] ?? ''),
                             ],
                           ),
                         ),
@@ -149,8 +180,6 @@ class _AlertPageState extends State<AlertPage> {
           ],
         ),
       ),
-
-      // Custom Bottom Navigation
       bottomNavigationBar: const CustomBottomNavBar(currentIndex: 3),
     );
   }

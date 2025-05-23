@@ -2,18 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:front_end/custom_button_navbar.dart';
 import 'package:front_end/group/yourgroup/add_member_page.dart';
 import 'package:front_end/group/yourgroup/edit_group_page.dart';
+import 'package:front_end/group/yourgroup/locations_page.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class GroupDetailPage extends StatefulWidget {
   final String groupName;
-  final String groupDescription;
   final String groupId;
 
   const GroupDetailPage({
     super.key,
     required this.groupName,
-    required this.groupDescription,
     required this.groupId,
   });
 
@@ -22,7 +21,7 @@ class GroupDetailPage extends StatefulWidget {
 }
 
 class _GroupDetailPageState extends State<GroupDetailPage> {
-  List<Map<String, String>> members = [];
+  List<Map<String, dynamic>> members = [];
   bool isLoading = true;
   String? errorMessage;
 
@@ -51,6 +50,8 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                     id
                     displayName
                   }
+                  isAdmin
+                  createdAt
                 }
               }
             }
@@ -71,8 +72,8 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
           return;
         }
 
-        if (result['data']?['userGroups'] != null) {
-          final List<dynamic> allGroups = result['data']['userGroups'];
+        final List<dynamic>? allGroups = result['data']?['userGroups'];
+        if (allGroups != null) {
           dynamic groupData;
 
           for (var group in allGroups) {
@@ -93,17 +94,15 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
 
           if (groupData != null) {
             final usersData = groupData['users'] ?? [];
-            List<Map<String, String>> allMembers = [];
+            List<Map<String, dynamic>> allMembers = [];
 
             for (var member in usersData) {
               final user = member['user'];
               if (user != null) {
                 allMembers.add({
-                  'displayName':
-                      (user['displayName']?.toString().isNotEmpty ?? false)
-                          ? user['displayName'].toString()
-                          : 'Anggota',
+                  'displayName': user['displayName']?.toString() ?? 'Anggota',
                   'id': user['id']?.toString() ?? '',
+                  'isAdmin': member['isAdmin'] ?? false,
                 });
               }
             }
@@ -142,6 +141,9 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final int memberCount = members.length;
+    final bool isMaxMember = memberCount >= 4;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -186,8 +188,18 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                           builder:
                               (context) => EditGroupPage(
                                 groupName: widget.groupName,
-                                groupDescription: widget.groupDescription,
-                                members: members,
+                                members:
+                                    members
+                                        .map(
+                                          (e) => {
+                                            'displayName':
+                                                e['displayName'].toString(),
+                                            'id': e['id'].toString(),
+                                            'isAdmin': e['isAdmin'] == true,
+                                            'groupId': widget.groupId,
+                                          },
+                                        )
+                                        .toList(),
                               ),
                         ),
                       );
@@ -209,29 +221,40 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                     child: Icon(Icons.group, color: Colors.white),
                   ),
                   const SizedBox(width: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        widget.groupName,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        widget.groupDescription,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    widget.groupName,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: Row(
+                children: [
+                  Text(
+                    'Jumlah anggota: $memberCount / 4',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (isMaxMember)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 10),
+                      child: Text(
+                        '(maksimal)',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20.0),
               child: Align(
@@ -255,6 +278,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                       : ListView.builder(
                         itemCount: members.length,
                         itemBuilder: (context, index) {
+                          final member = members[index];
                           return ListTile(
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 20,
@@ -263,48 +287,125 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                               backgroundColor: Colors.blue,
                               child: Icon(Icons.person, color: Colors.white),
                             ),
-                            title: Text(
-                              members[index]['displayName'] ?? 'Anggota',
-                            ),
+                            title: Text(member['displayName']),
+                            subtitle:
+                                member['isAdmin'] == true
+                                    ? const Text(
+                                      'Admin',
+                                      style: TextStyle(
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    )
+                                    : null,
                           );
                         },
                       ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder:
-                          (context) => AddMemberPage(groupId: widget.groupId),
-                    ),
-                  ).then((_) => fetchGroupDetails());
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.white,
-                  side: BorderSide(color: Colors.black.withOpacity(0.2)),
-                  shape: RoundedRectangleBorder(
+            GestureDetector(
+              onTap:
+                  isMaxMember
+                      ? null
+                      : () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder:
+                                (context) =>
+                                    AddMemberPage(groupId: widget.groupId),
+                          ),
+                        ).then((_) => fetchGroupDetails());
+                      },
+              child: Opacity(
+                opacity: isMaxMember ? 0.4 : 1.0,
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 14,
+                    horizontal: 16,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.black.withOpacity(0.2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.03),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.group_add, color: Colors.blue, size: 24),
+                      SizedBox(width: 10),
+                      Text(
+                        'Tambah Anggota',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Spacer(),
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: Colors.grey,
+                      ),
+                    ],
                   ),
                 ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) =>
+                            LocationsPage(groupId: int.parse(widget.groupId)),
+                  ),
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 14,
+                  horizontal: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.black.withOpacity(0.2)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
                   children: const [
-                    Icon(Icons.group_add, size: 30, color: Colors.blue),
+                    Icon(Icons.location_on, color: Colors.blue, size: 24),
                     SizedBox(width: 10),
                     Text(
-                      'Tambah Anggota',
-                      style: TextStyle(fontSize: 16, color: Colors.black),
+                      'Locations',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     Spacer(),
-                    Icon(Icons.arrow_forward_ios, size: 16),
+                    Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
                   ],
                 ),
               ),
             ),
+            const SizedBox(height: 20),
           ],
         ),
       ),

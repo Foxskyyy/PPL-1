@@ -26,10 +26,12 @@ class LiveTrackingPlacePage extends StatefulWidget {
 class _LiveTrackingPlacePageState extends State<LiveTrackingPlacePage> {
   bool showUsageLogs = false;
   List<WaterUsageData> waterUsageData = [];
-  String dateToday = DateTime.now().toString().split(' ')[0];
   List<UsageLog> usageLogs = [];
-  String location = "";
   double totalWaterUsage = 0.0;
+  List<String> groupLocations = [];
+  String location = "";
+  String? selectedDropdownLocation;
+  String dateToday = DateTime.now().toString().split(' ')[0];
 
   @override
   void initState() {
@@ -42,22 +44,22 @@ class _LiveTrackingPlacePageState extends State<LiveTrackingPlacePage> {
         'http://api-ecotrack.interphaselabs.com/graphql/query';
 
     final String query = '''
-      {
-        userGroups {
+    {
+      userGroups {
+        id
+        name
+        location
+        devices {
           id
-          name
-          createdAt
-          devices {
-            id
-            location
-            waterUsages {
-              flowRate
-              totalUsage
-              recordedAt
-            }
+          location
+          waterUsages {
+            flowRate
+            totalUsage
+            recordedAt
           }
         }
       }
+    }
     ''';
 
     try {
@@ -69,87 +71,79 @@ class _LiveTrackingPlacePageState extends State<LiveTrackingPlacePage> {
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        if (result['data'] != null && result['data']['userGroups'] != null) {
-          final userGroups = result['data']['userGroups'];
+        final userGroups = result['data']['userGroups'];
 
-          if (userGroups.isNotEmpty) {
-            final group = userGroups.firstWhere(
-              (group) => group['id'] == widget.groupId.toString(),
-              orElse: () => null,
-            );
+        final group = userGroups.firstWhere(
+          (g) => g['id'].toString() == widget.groupId.toString(),
+          orElse: () => null,
+        );
 
-            if (group != null) {
-              List<dynamic> devices = group['devices'] ?? [];
+        if (group != null) {
+          final List<dynamic> devices = group['devices'] ?? [];
+          final List<String> allLocations =
+              group['location'] != null
+                  ? List<String>.from(group['location'])
+                  : [];
 
-              final targetDevice = devices.firstWhere(
-                (device) => device['id'] == widget.deviceId,
-                orElse: () => null,
+          setState(() {
+            groupLocations = allLocations;
+            if (selectedDropdownLocation == null && allLocations.isNotEmpty) {
+              selectedDropdownLocation = allLocations.first;
+            }
+          });
+
+          final today =
+              DateTime.now().toLocal().toIso8601String().split('T')[0];
+
+          List<WaterUsageData> fetchedData = [];
+          List<UsageLog> fetchedLogs = [];
+          double total = 0.0;
+
+          for (var device in devices) {
+            if (selectedDropdownLocation != null &&
+                device['location'] != selectedDropdownLocation)
+              continue;
+
+            if (device['id'] == widget.deviceId && device['location'] != null) {
+              location = device['location'];
+            }
+
+            final usages = device['waterUsages'] ?? [];
+            for (var usage in usages) {
+              String recordedDate =
+                  usage['recordedAt'].toString().split('T')[0];
+              if (recordedDate != today) continue;
+
+              String formattedTime = _formatTimestamp(usage['recordedAt']);
+              double usageValue = usage['totalUsage'].toDouble();
+
+              fetchedData.add(
+                WaterUsageData(time: formattedTime, usage: usageValue),
               );
-
-              setState(() {
-                location =
-                    targetDevice != null && targetDevice['location'] != null
-                        ? targetDevice['location']
-                        : 'Unknown Location';
-              });
-
-              List<WaterUsageData> fetchedData = [];
-              List<UsageLog> fetchedLogs = [];
-
-              for (var device in devices) {
-                if (device['waterUsages'] != null) {
-                  for (var usage in device['waterUsages']) {
-                    String formattedTime = _formatTimestamp(
-                      usage['recordedAt'],
-                    );
-
-                    fetchedData.add(
-                      WaterUsageData(
-                        time: formattedTime,
-                        usage: usage['totalUsage'].toDouble(),
-                      ),
-                    );
-
-                    fetchedLogs.add(
-                      UsageLog(
-                        time: formattedTime,
-                        usage: usage['totalUsage'].toDouble(),
-                      ),
-                    );
-                  }
-                }
-              }
-
-              double total = 0.0;
-              for (var log in fetchedLogs) {
-                total += log.usage;
-              }
-
-              setState(() {
-                waterUsageData = fetchedData;
-                usageLogs = fetchedLogs;
-                totalWaterUsage = total;
-              });
+              fetchedLogs.add(UsageLog(time: formattedTime, usage: usageValue));
+              total += usageValue;
             }
           }
+
+          setState(() {
+            waterUsageData = fetchedData;
+            usageLogs = fetchedLogs;
+            totalWaterUsage = total;
+          });
         }
       }
     } catch (e) {
-      print('Error exception fetching data: $e');
+      print('Error fetching data: $e');
     }
   }
 
   String _formatTimestamp(String timestamp) {
     try {
-      final DateTime dateTime = DateTime.parse(timestamp);
+      final DateTime dateTime = DateTime.parse(timestamp).toLocal();
       return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       return timestamp;
     }
-  }
-
-  double _calculateTotalUsage() {
-    return totalWaterUsage;
   }
 
   @override
@@ -208,6 +202,33 @@ class _LiveTrackingPlacePageState extends State<LiveTrackingPlacePage> {
                 ),
               ),
               const SizedBox(height: 16),
+
+              if (groupLocations.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: DropdownButtonFormField<String>(
+                    value: selectedDropdownLocation,
+                    decoration: const InputDecoration(
+                      labelText: 'Pilih Lokasi',
+                      border: OutlineInputBorder(),
+                    ),
+                    items:
+                        groupLocations.map((loc) {
+                          return DropdownMenuItem<String>(
+                            value: loc,
+                            child: Text(loc),
+                          );
+                        }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedDropdownLocation = value;
+                        fetchWaterUsageData();
+                      });
+                    },
+                  ),
+                ),
+
+              const SizedBox(height: 16),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Row(
@@ -238,6 +259,7 @@ class _LiveTrackingPlacePageState extends State<LiveTrackingPlacePage> {
                   ],
                 ),
               ),
+
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Container(
@@ -246,30 +268,35 @@ class _LiveTrackingPlacePageState extends State<LiveTrackingPlacePage> {
                     color: Colors.blue.shade100,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: _buildUsageGraph(),
+                  child: CustomPaint(
+                    size: const Size(double.infinity, 150),
+                    painter: UsageGraphPainter(data: waterUsageData),
+                  ),
                 ),
               ),
+
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Row(
                   children: [
                     const Text(
-                      "Total water usage : ",
+                      "Total water usage: ",
                       style: TextStyle(fontWeight: FontWeight.w500),
                     ),
                     Text(
-                      "${_calculateTotalUsage().toStringAsFixed(2)} L",
+                      "${totalWaterUsage.toStringAsFixed(2)} L",
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
               ),
+
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Row(
                   children: [
                     const Text(
-                      "Location : ",
+                      "Location: ",
                       style: TextStyle(fontWeight: FontWeight.w500),
                     ),
                     Text(
@@ -279,6 +306,7 @@ class _LiveTrackingPlacePageState extends State<LiveTrackingPlacePage> {
                   ],
                 ),
               ),
+
               const SizedBox(height: 16),
               Center(
                 child: SizedBox(
@@ -301,72 +329,75 @@ class _LiveTrackingPlacePageState extends State<LiveTrackingPlacePage> {
                 ),
               ),
               const SizedBox(height: 16),
+
               if (showUsageLogs)
-                SizedBox(height: 300, child: _buildUsageLogs()),
+                SizedBox(
+                  height: 300,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Column(
+                      children: [
+                        const Text(
+                          "Usage Logs:",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          dateToday,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child:
+                              usageLogs.isEmpty
+                                  ? const Center(
+                                    child: Text("No data available"),
+                                  )
+                                  : ListView.builder(
+                                    itemCount: usageLogs.length,
+                                    itemBuilder: (context, index) {
+                                      final log = usageLogs[index];
+                                      return Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 4.0,
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              log.time,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            Text(
+                                              "${log.usage.toStringAsFixed(2)}L/s",
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
       ),
       bottomNavigationBar: const CustomBottomNavBar(currentIndex: 0),
-    );
-  }
-
-  Widget _buildUsageGraph() {
-    return CustomPaint(
-      size: const Size(double.infinity, 150),
-      painter: UsageGraphPainter(data: waterUsageData),
-    );
-  }
-
-  Widget _buildUsageLogs() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          const Text(
-            "Usage Logs :",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            dateToday,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child:
-                usageLogs.isEmpty
-                    ? const Center(child: Text("No data available"))
-                    : ListView.builder(
-                      itemCount: usageLogs.length,
-                      itemBuilder: (context, index) {
-                        final log = usageLogs[index];
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                log.time,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                "${log.usage.toStringAsFixed(2)}L/s",
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -426,12 +457,6 @@ class UsageGraphPainter extends CustomPainter {
       }
 
       timeLabels = data.map((d) => d.time).toList();
-    } else {
-      points.addAll([
-        Offset(0, size.height * 0.8),
-        Offset(size.width, size.height * 0.2),
-      ]);
-      timeLabels = ['00:00', '03:10', '06:20', '09:30', '12:40', '15:50'];
     }
 
     if (points.isNotEmpty) {
@@ -461,16 +486,16 @@ class UsageGraphPainter extends CustomPainter {
     for (int i = 0; i <= numDivisions; i++) {
       final y = size.height - (i * size.height / numDivisions);
       final value = (i * increment).toStringAsFixed(1);
-
       textPainter.text = TextSpan(text: value, style: textStyle);
       textPainter.layout();
       textPainter.paint(canvas, Offset(-15, y - 5));
-
-      final gridPaint =
-          Paint()
-            ..color = Colors.grey.withOpacity(0.3)
-            ..strokeWidth = 0.5;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        Paint()
+          ..color = Colors.grey.withOpacity(0.3)
+          ..strokeWidth = 0.5,
+      );
     }
 
     if (timeLabels.isNotEmpty) {
@@ -481,28 +506,23 @@ class UsageGraphPainter extends CustomPainter {
               : 1;
 
       for (int i = 0; i < timeLabels.length; i += step) {
-        if (i >= timeLabels.length) continue;
-
         final x = i * (size.width / (data.length > 1 ? data.length - 1 : 1));
-
         textPainter.text = TextSpan(text: timeLabels[i], style: textStyle);
         textPainter.layout();
         textPainter.paint(canvas, Offset(x - 10, size.height + 5));
-
-        final gridPaint =
-            Paint()
-              ..color = Colors.grey.withOpacity(0.2)
-              ..strokeWidth = 0.5;
-        canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+        canvas.drawLine(
+          Offset(x, 0),
+          Offset(x, size.height),
+          Paint()
+            ..color = Colors.grey.withOpacity(0.2)
+            ..strokeWidth = 0.5,
+        );
       }
     }
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    if (oldDelegate is UsageGraphPainter) {
-      return oldDelegate.data != data;
-    }
-    return true;
+    return oldDelegate is UsageGraphPainter && oldDelegate.data != data;
   }
 }

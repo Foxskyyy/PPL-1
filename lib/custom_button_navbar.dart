@@ -97,7 +97,7 @@ class CustomBottomNavBar extends StatelessWidget {
             BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
             BottomNavigationBarItem(
               icon: Icon(Icons.notifications_outlined),
-              label: 'Alert',
+              label: 'Notification',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.settings),

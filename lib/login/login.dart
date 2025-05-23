@@ -94,6 +94,7 @@ class _LoginPageState extends State<LoginPage> {
         UserSession.userID = userId;
         UserSession.displayName = username;
         UserSession.email = userEmail;
+        await UserSession.saveSession();
 
         Navigator.pushReplacement(
           context,
@@ -166,6 +167,7 @@ class _LoginPageState extends State<LoginPage> {
         UserSession.userID = userId;
         UserSession.displayName = username;
         UserSession.email = userEmail;
+        await UserSession.saveSession();
 
         Navigator.pushReplacement(
           context,

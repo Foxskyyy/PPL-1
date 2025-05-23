@@ -6,7 +6,12 @@ import 'package:front_end/group/yourgroup/your_group_page.dart'; // Import halam
 import 'package:front_end/user_session.dart';
 
 class GroupPage extends StatelessWidget {
-  const GroupPage({super.key, required String groupId, required String groupDescription, required String groupName});
+  const GroupPage({
+    super.key,
+    required String groupId,
+    required String groupDescription,
+    required String groupName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -76,18 +81,18 @@ class GroupPage extends StatelessWidget {
                       },
                     ),
                     const SizedBox(height: 20),
-                    _GroupItem(
-                      icon: Icons.group_outlined,
-                      title: 'Join Group',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const JoinGroupPage(),
-                          ),
-                        );
-                      },
-                    ),
+                    // _GroupItem(
+                    //   icon: Icons.group_outlined,
+                    //   title: 'Join Group',
+                    //   onTap: () {
+                    //     Navigator.push(
+                    //       context,
+                    //       MaterialPageRoute(
+                    //         builder: (_) => const JoinGroupPage(),
+                    //       ),
+                    //     );
+                    //   },
+                    // ),
                   ],
                 ),
               ),

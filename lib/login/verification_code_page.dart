@@ -19,29 +19,18 @@ class VerificationCodePage extends StatefulWidget {
 }
 
 class _VerificationCodePageState extends State<VerificationCodePage> {
-  final List<TextEditingController> _controllers = List.generate(
-    6,
-    (_) => TextEditingController(),
-  );
-  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
-
-  final String apiUrl = "http://api-ecotrack.interphaselabs.com/graphql/query";
-
+  final TextEditingController _codeController = TextEditingController();
+  final String apiUrl = "https://api-ecotrack.interphaselabs.com/graphql/query";
   int _resendCountdown = 0;
   Timer? _timer;
 
   void _startResendCountdown() {
-    setState(() {
-      _resendCountdown = 60;
-    });
-
+    setState(() => _resendCountdown = 60);
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_resendCountdown == 0) {
         timer.cancel();
       } else {
-        setState(() {
-          _resendCountdown--;
-        });
+        setState(() => _resendCountdown--);
       }
     });
   }
@@ -59,9 +48,9 @@ class _VerificationCodePageState extends State<VerificationCodePage> {
   }
 
   Future<void> _verifyCode() async {
-    final code = _controllers.map((c) => c.text).join();
+    final code = _codeController.text.trim();
     if (code.length != 6) {
-      _showError("Please enter the full 6-digit verification code.");
+      _showError("Please enter the full 6-digit code.");
       return;
     }
 
@@ -73,10 +62,7 @@ class _VerificationCodePageState extends State<VerificationCodePage> {
 
     final response = await http.post(
       Uri.parse(apiUrl),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'query': mutation,
         'variables': {'email': widget.email, 'token': code},
@@ -84,21 +70,16 @@ class _VerificationCodePageState extends State<VerificationCodePage> {
     );
 
     if (response.statusCode == 200) {
-      try {
-        final jsonData = jsonDecode(response.body);
-        if (jsonData['errors'] != null) {
-          final message = jsonData['errors'][0]['message'];
-          _showError("Verification failed: $message");
-        } else {
-          _showSuccess("Verification successful!");
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const HomePage()),
-            (route) => false,
-          );
-        }
-      } catch (e) {
-        _showError("Invalid response format.");
+      final result = jsonDecode(response.body);
+      if (result['errors'] != null) {
+        final msg = result['errors'][0]['message'] ?? "Verification failed.";
+        _showError("Verification failed: $msg");
+      } else {
+        _showSuccess("Email verified successfully.");
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
       }
     } else {
       _showError("Server error: ${response.statusCode}");
@@ -109,17 +90,14 @@ class _VerificationCodePageState extends State<VerificationCodePage> {
     if (_resendCountdown > 0) return;
 
     const mutation = '''
-      mutation ResendVerificationEmail(\$email: String!) {
+      mutation ResendVerification(\$email: String!) {
         ResendVerificationEmail(email: \$email)
       }
     ''';
 
     final response = await http.post(
       Uri.parse(apiUrl),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'query': mutation,
         'variables': {'email': widget.email},
@@ -127,17 +105,13 @@ class _VerificationCodePageState extends State<VerificationCodePage> {
     );
 
     if (response.statusCode == 200) {
-      try {
-        final jsonData = jsonDecode(response.body);
-        if (jsonData['errors'] != null) {
-          final message = jsonData['errors'][0]['message'];
-          _showError("Resend failed: $message");
-        } else {
-          _showSuccess("Verification code resent to ${widget.email}");
-          _startResendCountdown();
-        }
-      } catch (e) {
-        _showError("Failed to parse server response.");
+      final result = jsonDecode(response.body);
+      if (result['errors'] != null) {
+        final msg = result['errors'][0]['message'] ?? "Unknown error";
+        _showError("Resend failed: $msg");
+      } else {
+        _showSuccess("Verification code resent to ${widget.email}");
+        _startResendCountdown();
       }
     } else {
       _showError("Server error: ${response.statusCode}");
@@ -147,18 +121,13 @@ class _VerificationCodePageState extends State<VerificationCodePage> {
   @override
   void dispose() {
     _timer?.cancel();
-    for (final controller in _controllers) {
-      controller.dispose();
-    }
-    for (final focusNode in _focusNodes) {
-      focusNode.dispose();
-    }
+    _codeController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    String masked = widget.email.replaceRange(
+    String maskedEmail = widget.email.replaceRange(
       2,
       widget.email.indexOf("@"),
       "*****",
@@ -184,35 +153,36 @@ class _VerificationCodePageState extends State<VerificationCodePage> {
             ),
             const SizedBox(height: 12),
             Text(
-              "Please type the verification code sent to\n$masked",
+              "Enter the verification code sent to\n$maskedEmail",
               textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 30),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: List.generate(6, (i) {
-                return SizedBox(
-                  width: 45,
-                  child: TextField(
-                    controller: _controllers[i],
-                    focusNode: _focusNodes[i],
-                    keyboardType: TextInputType.text,
-                    textAlign: TextAlign.center,
-                    maxLength: 1,
-                    decoration: const InputDecoration(
-                      counterText: '',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (v) {
-                      if (v.isNotEmpty && i < 5) {
-                        FocusScope.of(context).requestFocus(_focusNodes[i + 1]);
-                      }
-                    },
-                  ),
-                );
-              }),
+
+            // OTP Field Style
+            TextField(
+              controller: _codeController,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 24,
+                letterSpacing: 32,
+                fontWeight: FontWeight.bold,
+              ),
+              decoration: InputDecoration(
+                hintText: "------",
+                counterText: "",
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(width: 2, color: Colors.grey.shade400),
+                ),
+                focusedBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(width: 2, color: Colors.blue),
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
             ),
+
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
@@ -227,10 +197,7 @@ class _VerificationCodePageState extends State<VerificationCodePage> {
                 ),
                 child: const Text(
                   "Verify",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(color: Colors.white),
                 ),
               ),
             ),

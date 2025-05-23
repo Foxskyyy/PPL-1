@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:front_end/custom_button_navbar.dart';
-import 'package:front_end/homepage/device_list_page.dart'; // GANTI ke file tujuan
+import 'package:front_end/homepage/device_list_page.dart';
 import 'package:front_end/group/yourgroup/your_group_page.dart';
 import 'package:front_end/user_session.dart';
 import 'package:front_end/ai_consume_page.dart';
@@ -29,13 +29,11 @@ class _HomePageState extends State<HomePage> {
   Future<void> fetchWaterUsageData() async {
     const String apiUrl =
         'http://api-ecotrack.interphaselabs.com/graphql/query';
-
     const String query = '''
       {
         userGroups {
           id
           name
-          createdAt
           devices {
             id
             location
@@ -63,17 +61,26 @@ class _HomePageState extends State<HomePage> {
           List<WaterUsageData> fetchedData = [];
           double total = 0.0;
 
+          final today = DateTime.now();
+          final todayDate = DateTime(today.year, today.month, today.day);
+
           for (var group in userGroups) {
             List<dynamic> devices = group['devices'] ?? [];
             for (var device in devices) {
               for (var usage in device['waterUsages'] ?? []) {
-                fetchedData.add(
-                  WaterUsageData(
-                    time: _formatTimestamp(usage['recordedAt']),
-                    usage: usage['totalUsage'].toDouble(),
-                  ),
-                );
-                total += usage['totalUsage'].toDouble();
+                final recordedAt = DateTime.tryParse(usage['recordedAt']);
+                if (recordedAt != null &&
+                    recordedAt.year == todayDate.year &&
+                    recordedAt.month == todayDate.month &&
+                    recordedAt.day == todayDate.day) {
+                  fetchedData.add(
+                    WaterUsageData(
+                      time: _formatTimestamp(usage['recordedAt']),
+                      usage: usage['totalUsage'].toDouble(),
+                    ),
+                  );
+                  total += usage['totalUsage'].toDouble();
+                }
               }
             }
           }
@@ -115,11 +122,7 @@ class _HomePageState extends State<HomePage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Image.asset(
-                    'assets/images/ecotrack_logo.png',
-                    width: 60,
-                    height: 60,
-                  ),
+                  Image.asset('assets/images/ecotrack_logo.png', width: 60),
                   const CircleAvatar(
                     backgroundColor: Colors.lightBlue,
                     radius: 18,
@@ -139,7 +142,6 @@ class _HomePageState extends State<HomePage> {
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
                   ),
                 ),
               ),
@@ -162,7 +164,7 @@ class _HomePageState extends State<HomePage> {
                         "Today's Usage",
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 18,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -170,7 +172,7 @@ class _HomePageState extends State<HomePage> {
                     Container(
                       margin: const EdgeInsets.symmetric(
                         horizontal: 8,
-                        vertical: 4,
+                        vertical: 1,
                       ),
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
@@ -210,24 +212,24 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 5),
                           const Text(
                             "Penggunaan Air (Liter)",
                             style: TextStyle(fontSize: 12),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 15),
                           SizedBox(height: 150, child: _buildUsageGraph()),
                           const SizedBox(height: 16),
                           Row(
                             children: [
                               const Text(
                                 "Total water usage: ",
-                                style: TextStyle(fontSize: 9),
+                                style: TextStyle(fontSize: 12),
                               ),
                               Text(
                                 "${totalWaterUsage.toStringAsFixed(2)} L",
                                 style: const TextStyle(
-                                  fontSize: 9,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -284,9 +286,9 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 50),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30.0),
+              padding: const EdgeInsets.symmetric(horizontal: 40.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
@@ -309,9 +311,7 @@ class _HomePageState extends State<HomePage> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder:
-                              (_) =>
-                                  const DeviceListPage(), // << diarahkan ke DeviceListPage
+                          builder: (_) => const DeviceListPage(),
                         ),
                       );
                     },
@@ -333,6 +333,113 @@ class _HomePageState extends State<HomePage> {
       painter: UsageGraphPainter(data: waterUsageData),
     );
   }
+}
+
+class WaterUsageData {
+  final String time;
+  final double usage;
+
+  WaterUsageData({required this.time, required this.usage});
+}
+
+class UsageGraphPainter extends CustomPainter {
+  final List<WaterUsageData> data;
+
+  UsageGraphPainter({this.data = const []});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const double padding = 16;
+    final Paint linePaint =
+        Paint()
+          ..color = Colors.blue
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2;
+    final Paint fillPaint =
+        Paint()
+          ..color = Colors.blue.withOpacity(0.3)
+          ..style = PaintingStyle.fill;
+    final TextStyle labelStyle = const TextStyle(
+      color: Colors.black,
+      fontSize: 10,
+    );
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+
+    double maxUsage =
+        data.isNotEmpty
+            ? data.map((e) => e.usage).reduce((a, b) => a > b ? a : b)
+            : 5.0;
+    if (maxUsage < 5) maxUsage = 5.0;
+
+    final double scaleY = (size.height - padding * 2) / maxUsage;
+    final double stepX =
+        data.length > 1
+            ? (size.width - padding * 2) / (data.length - 1)
+            : size.width / 2;
+    final List<Offset> points = [];
+
+    for (int i = 0; i < data.length; i++) {
+      final x = padding + i * stepX;
+      final y = size.height - padding - (data[i].usage * scaleY);
+      points.add(Offset(x, y));
+    }
+
+    final Path linePath = Path();
+    final Path fillPath = Path();
+
+    if (points.isNotEmpty) {
+      linePath.moveTo(points[0].dx, points[0].dy);
+      fillPath.moveTo(points[0].dx, size.height - padding);
+      fillPath.lineTo(points[0].dx, points[0].dy);
+
+      for (int i = 1; i < points.length; i++) {
+        final prev = points[i - 1];
+        final curr = points[i];
+        final mid = Offset((prev.dx + curr.dx) / 2, (prev.dy + curr.dy) / 2);
+        linePath.quadraticBezierTo(prev.dx, prev.dy, mid.dx, mid.dy);
+        linePath.quadraticBezierTo(mid.dx, mid.dy, curr.dx, curr.dy);
+        fillPath.lineTo(curr.dx, curr.dy);
+      }
+
+      fillPath.lineTo(points.last.dx, size.height - padding);
+      fillPath.close();
+
+      canvas.drawPath(fillPath, fillPaint);
+      canvas.drawPath(linePath, linePaint);
+    }
+
+    const int ySteps = 5;
+    for (int i = 0; i <= ySteps; i++) {
+      final yValue = (maxUsage / ySteps) * i;
+      final y = size.height - padding - (yValue * scaleY);
+      textPainter.text = TextSpan(
+        text: yValue.toStringAsFixed(1),
+        style: labelStyle,
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(0, y - 6));
+      canvas.drawLine(
+        Offset(padding, y),
+        Offset(size.width - padding, y),
+        Paint()
+          ..color = Colors.grey.withOpacity(0.3)
+          ..strokeWidth = 0.5,
+      );
+    }
+
+    for (int i = 0; i < points.length; i++) {
+      final label = data[i].time;
+      textPainter.text = TextSpan(text: label, style: labelStyle);
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(points[i].dx - textPainter.width / 2, size.height - padding + 4),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 class _QuickAction extends StatelessWidget {
@@ -375,93 +482,4 @@ class _QuickAction extends StatelessWidget {
       ],
     );
   }
-}
-
-class WaterUsageData {
-  final String time;
-  final double usage;
-
-  WaterUsageData({required this.time, required this.usage});
-}
-
-class UsageGraphPainter extends CustomPainter {
-  final List<WaterUsageData> data;
-
-  UsageGraphPainter({this.data = const []});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = Colors.blue
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2;
-
-    final fillPaint =
-        Paint()
-          ..color = Colors.blue.withOpacity(0.3)
-          ..style = PaintingStyle.fill;
-
-    final path = Path();
-    final fillPath = Path();
-    final List<Offset> points = [];
-    List<String> timeLabels = [];
-
-    double maxUsage = data
-        .map((e) => e.usage)
-        .fold(0.0, (a, b) => a > b ? a : b);
-    if (maxUsage < 5) maxUsage = 5.0;
-    maxUsage *= 1.2;
-
-    final scaleY = size.height / maxUsage;
-    final stepX = data.length > 1 ? size.width / (data.length - 1) : size.width;
-
-    for (int i = 0; i < data.length; i++) {
-      final x = i * stepX;
-      final y = size.height - (data[i].usage * scaleY);
-      points.add(Offset(x, y));
-      timeLabels.add(data[i].time);
-    }
-
-    if (points.isNotEmpty) {
-      path.moveTo(points[0].dx, points[0].dy);
-      fillPath.moveTo(points[0].dx, size.height);
-      fillPath.lineTo(points[0].dx, points[0].dy);
-
-      for (final point in points.skip(1)) {
-        path.lineTo(point.dx, point.dy);
-        fillPath.lineTo(point.dx, point.dy);
-      }
-
-      fillPath.lineTo(points.last.dx, size.height);
-      fillPath.close();
-
-      canvas.drawPath(fillPath, fillPaint);
-      canvas.drawPath(path, paint);
-    }
-
-    final textStyle = const TextStyle(color: Colors.black, fontSize: 10);
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
-
-    const ySteps = 5;
-    for (int i = 0; i <= ySteps; i++) {
-      final yValue = (maxUsage / ySteps) * i;
-      final y = size.height - (yValue * scaleY);
-      textPainter.text = TextSpan(
-        text: yValue.toStringAsFixed(1),
-        style: textStyle,
-      );
-      textPainter.layout();
-      textPainter.paint(canvas, Offset(0, y - 6));
-
-      final line =
-          Paint()
-            ..color = Colors.grey.withOpacity(0.3)
-            ..strokeWidth = 0.5;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), line);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

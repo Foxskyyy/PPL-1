@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:front_end/homepage/add_device.dart'; // GANTI SESUAI PATH ASLI
+import 'package:front_end/homepage/add_device.dart';
 import 'package:front_end/custom_button_navbar.dart';
+import 'package:front_end/user_session.dart';
 
 class DeviceListPage extends StatefulWidget {
   const DeviceListPage({super.key});
@@ -20,16 +21,81 @@ class _DeviceListPageState extends State<DeviceListPage> {
   @override
   void initState() {
     super.initState();
-    fetchDevices();
+    fetchGroupDevices();
   }
 
-  Future<void> fetchDevices() async {
+  Future<void> fetchGroupDevices() async {
     const String query = '''
-      {
+    {
+      userGroups {
+        id
+        name
+        users {
+          user {
+            id
+          }
+        }
         devices {
           id
           name
         }
+      }
+    }
+    ''';
+
+    try {
+      final int? userId = await UserSession.getUserID();
+      if (userId == null) {
+        print('❌ User ID null');
+        setState(() => isLoading = false);
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse(apiUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'query': query}),
+      );
+
+      final result = jsonDecode(response.body);
+      print('📥 Full userGroups Response: $result');
+
+      final List<dynamic> userGroups = result['data']['userGroups'];
+      final List<Map<String, dynamic>> userDevices = [];
+
+      for (var group in userGroups) {
+        final List<dynamic> users = group['users'];
+        final bool isMember = users.any(
+          (u) => u['user']['id'].toString() == userId.toString(),
+        );
+
+        if (isMember) {
+          final List<dynamic> groupDevices = group['devices'] ?? [];
+          for (var device in groupDevices) {
+            userDevices.add({
+              'id': device['id'],
+              'name': device['name'],
+              'groupId': int.parse(group['id'].toString()), // ✅ as int
+              'groupName': group['name'] ?? 'Unnamed Group',
+            });
+          }
+        }
+      }
+
+      setState(() {
+        devices = userDevices;
+        isLoading = false;
+      });
+    } catch (e) {
+      print('❌ Error ambil group devices: $e');
+      setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> removeDevice(String deviceId, int groupId) async {
+    final String mutation = '''
+      mutation {
+        removeDevice(groupId: $groupId, deviceId: "$deviceId")
       }
     ''';
 
@@ -37,30 +103,56 @@ class _DeviceListPageState extends State<DeviceListPage> {
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'query': query}),
+        body: jsonEncode({'query': mutation}),
       );
 
-      print('Raw response body: ${response.body}');
-
       final result = jsonDecode(response.body);
+      print('📥 Remove response: $result');
 
-      if (result['data'] != null && result['data']['devices'] != null) {
-        final List fetched = result['data']['devices'];
-        setState(() {
-          devices =
-              fetched.map<Map<String, dynamic>>((item) {
-                return {'id': item['id'], 'name': item['name']};
-              }).toList();
-          isLoading = false;
-        });
+      if (response.statusCode == 200 &&
+          result['data'] != null &&
+          result['data']['removeDevice'] != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Perangkat berhasil dihapus')),
+        );
+        fetchGroupDevices();
       } else {
-        print('No devices data found in response');
-        setState(() => isLoading = false);
+        final err = result['errors']?[0]?['message'] ?? 'Unknown error';
+        print('❌ Gagal hapus device: $err');
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Gagal menghapus: $err')));
       }
     } catch (e) {
-      print('Error fetching devices: $e');
-      setState(() => isLoading = false);
+      print('❌ Exception hapus device: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
+  }
+
+  void _confirmDelete(String deviceId, int groupId) {
+    showDialog(
+      context: context,
+      builder:
+          (_) => AlertDialog(
+            title: const Text('Hapus Perangkat'),
+            content: const Text('Yakin ingin menghapus perangkat ini?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Batal'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  removeDevice(deviceId, groupId);
+                },
+                child: const Text('Hapus', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+    );
   }
 
   @override
@@ -71,7 +163,6 @@ class _DeviceListPageState extends State<DeviceListPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // HEADER SESUAI TEMPLATE
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
               child: Row(
@@ -91,10 +182,8 @@ class _DeviceListPageState extends State<DeviceListPage> {
               ),
             ),
             const Divider(color: Colors.black),
-
             _buildBackButton(),
             _buildAddDeviceButton(),
-
             if (isLoading)
               const Padding(
                 padding: EdgeInsets.all(20.0),
@@ -102,24 +191,41 @@ class _DeviceListPageState extends State<DeviceListPage> {
               )
             else
               Expanded(
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: devices.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final device = devices[index];
-                    return ListTile(
-                      title: Text(
-                        device['name'] ?? 'Unnamed Device',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      onTap: () {
-                        print("Tapped Device ID: ${device['id']}");
-                        // Tambahkan navigasi detail jika dibutuhkan
-                      },
-                    );
-                  },
-                ),
+                child:
+                    devices.isEmpty
+                        ? const Center(
+                          child: Text('Tidak ada perangkat di grup ini.'),
+                        )
+                        : ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          itemCount: devices.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final device = devices[index];
+                            return ListTile(
+                              title: Text(
+                                device['name'] ?? 'Unnamed Device',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              subtitle: Text(
+                                'Grup: ${device['groupName'] ?? ''}',
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
+                                onPressed:
+                                    () => _confirmDelete(
+                                      device['id'],
+                                      device['groupId'],
+                                    ),
+                              ),
+                            );
+                          },
+                        ),
               ),
           ],
         ),
@@ -149,7 +255,7 @@ class _DeviceListPageState extends State<DeviceListPage> {
 
   Widget _buildAddDeviceButton() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       child: GestureDetector(
         onTap: () {
           Navigator.push(

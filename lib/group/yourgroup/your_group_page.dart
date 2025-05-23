@@ -197,7 +197,7 @@ class _YourGroupPageState extends State<YourGroupPage> {
                                   builder:
                                       (_) => GroupDetailPage(
                                         groupName: groups[index]['name'],
-                                        groupDescription: 'Group description',
+
                                         groupId: groups[index]['groupId'],
                                       ),
                                 ),

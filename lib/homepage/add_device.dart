@@ -12,14 +12,14 @@ class AddDevicePage extends StatefulWidget {
 
 class _AddDevicePageState extends State<AddDevicePage> {
   String deviceName = "";
+  String inputDeviceId = "";
   String? selectedLocation;
   int? selectedGroupId;
   bool isLoading = false;
 
-  final String deviceId = "ET-d31e0e38-91bf-4b83-8439-1a7e72b1d8c4";
   final String apiUrl = 'http://api-ecotrack.interphaselabs.com/graphql/query';
-
   List<Map<String, dynamic>> groups = [];
+  Map<int, List<String>> groupLocations = {};
 
   @override
   void initState() {
@@ -39,6 +39,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
         userGroups {
           id
           name
+          location
           users {
             user {
               id
@@ -73,6 +74,14 @@ class _AddDevicePageState extends State<AddDevicePage> {
                   );
                 })
                 .map((group) {
+                  final groupId = int.parse(group['id'].toString());
+                  final locationList =
+                      group['location'] != null
+                          ? List<String>.from(group['location'])
+                          : <String>[];
+
+                  groupLocations[groupId] = locationList;
+
                   return {
                     'id': group['id'].toString(),
                     'name': group['name'] ?? 'Unnamed Group',
@@ -93,6 +102,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
 
   Future<void> saveDevice() async {
     if (deviceName.isNotEmpty &&
+        inputDeviceId.isNotEmpty &&
         selectedGroupId != null &&
         selectedLocation != null &&
         selectedLocation!.isNotEmpty) {
@@ -101,7 +111,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
       final String mutation = '''
         mutation AddDeviceToGroup {
           addDeviceToUserGroup(
-            deviceId: "$deviceId",
+            deviceId: "$inputDeviceId",
             deviceName: "$deviceName",
             userGroupID: $selectedGroupId,
             location: "$selectedLocation"
@@ -153,6 +163,11 @@ class _AddDevicePageState extends State<AddDevicePage> {
 
   @override
   Widget build(BuildContext context) {
+    final List<String> availableLocations =
+        selectedGroupId != null && groupLocations.containsKey(selectedGroupId)
+            ? groupLocations[selectedGroupId]!
+            : [];
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -166,6 +181,19 @@ class _AddDevicePageState extends State<AddDevicePage> {
               ),
               const Divider(),
               const SizedBox(height: 10),
+
+              // Device ID
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: TextField(
+                  decoration: const InputDecoration(
+                    labelText: 'Device ID',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) => inputDeviceId = value,
+                ),
+              ),
+              const SizedBox(height: 20),
 
               // Device Name
               Padding(
@@ -186,7 +214,7 @@ class _AddDevicePageState extends State<AddDevicePage> {
                 child: DropdownButtonFormField<int>(
                   value: selectedGroupId,
                   decoration: const InputDecoration(
-                    labelText: 'Pilih Grup',
+                    labelText: 'Choose A Group',
                     border: OutlineInputBorder(),
                   ),
                   items:
@@ -201,21 +229,34 @@ class _AddDevicePageState extends State<AddDevicePage> {
                   onChanged: (value) {
                     setState(() {
                       selectedGroupId = value;
+                      selectedLocation = null;
                     });
                   },
                 ),
               ),
               const SizedBox(height: 20),
 
-              // Lokasi
+              // Pilih Lokasi
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: TextField(
+                child: DropdownButtonFormField<String>(
+                  value: selectedLocation,
                   decoration: const InputDecoration(
-                    labelText: 'Masukkan Lokasi',
+                    labelText: 'Choose A Location',
                     border: OutlineInputBorder(),
                   ),
-                  onChanged: (value) => selectedLocation = value,
+                  items:
+                      availableLocations
+                          .map(
+                            (loc) =>
+                                DropdownMenuItem(value: loc, child: Text(loc)),
+                          )
+                          .toList(),
+                  onChanged: (value) {
+                    setState(() {
+                      selectedLocation = value;
+                    });
+                  },
                 ),
               ),
               const SizedBox(height: 30),
@@ -229,8 +270,8 @@ class _AddDevicePageState extends State<AddDevicePage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.grey,
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 30,
-                        vertical: 16,
+                        horizontal: 25,
+                        vertical: 10,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -246,8 +287,8 @@ class _AddDevicePageState extends State<AddDevicePage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 30,
-                        vertical: 16,
+                        horizontal: 25,
+                        vertical: 10,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),

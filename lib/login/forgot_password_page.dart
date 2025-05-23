@@ -20,7 +20,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
 
-  final String apiUrl = 'https://api.interphaselabs.com/graphql/query';
+  final String apiUrl = 'http://api-ecotrack.interphaselabs.com/graphql/query';
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
