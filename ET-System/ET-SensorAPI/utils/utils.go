@@ -89,7 +89,7 @@ func SendInvitationEmail(senderEmail string, receiverEmail string, groupName str
 	<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; text-align: center;">
 		<div style="max-width: 500px; background-color: #ffffff; padding: 20px; margin: 0 auto; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); text-align: center;">
 		<div style="background-color: #63AF2F; padding: 20px; border-top-left-radius: 8px; border-top-right-radius: 8px;">
-			<img src="https://api.interphaselabs.com/static/logo.png" alt="EcoTrack Logo" style="max-width: 300px; margin-bottom: 10px;" />
+			<img src="https://api2.interphaselabs.com/media/images/logo.png" alt="EcoTrack Logo" style="max-width: 300px; margin-bottom: 10px;" />
 		</div>
 		<h2 style="color: #333;">Group Invitation</h2>
 		<p style="font-size: 16px; color: #555;">Hi!</p>

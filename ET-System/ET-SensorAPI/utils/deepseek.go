@@ -41,10 +41,7 @@ func AnalyzeUsageData(input string) (string, error) {
 
 	url := "https://openrouter.ai/api/v1/chat/completions"
 
-	prompt := `Analisis data penggunaan air berikut dan buat laporan yang jelas dan dapat ditindaklanjuti. 
-Tugas Anda meliputi: merangkum konsumsi total dengan menjumlahkan semua totalusage yang jaraknya cukup jauh jika jaraknya sangat dekat seperti ms maka akan menjadi satu, rata-rata harian, dan puncak pemakaian; mendeteksi pola, tren musiman, serta anomali; dan memberikan saran untuk efisiensi penggunaan air.
-Gunakan bahasa yang mudah dipahami oleh non-teknisi.
-Batasi hasil analisis dalam 4 sampai 5 kalimat ringkas dan padat. gunakan satuan liter` + input
+	prompt := `Buat laporan penggunaan air dalam 3 kalimat (termasuk: total konsumsi, rata-rata harian, puncak pemakaian, pola/anomali, dan saran efisiensi). Gunakan satuan liter dan bahasa sehari-hari.` + input
 
 	requestBody, _ := json.Marshal(OpenRouterRequest{
 		Model: "deepseek/deepseek-chat-v3-0324:free",
