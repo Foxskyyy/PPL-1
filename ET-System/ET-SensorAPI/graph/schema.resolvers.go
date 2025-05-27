@@ -181,6 +181,12 @@ func (r *mutationResolver) ResendVerificationEmail(ctx context.Context, email st
 	}
 
 	accessToken, _ := utils.GenerateOTP()
+	user.VerifyToken = accessToken
+
+
+	if err := config.DB.Save(&user).Error; err != nil {
+		return nil, errors.New("failed to save user")
+	}
 
 	if err := utils.SendVerificationEmail(user.Email, accessToken); err != nil {
 		return nil, errors.New("failed to send verification email")
@@ -202,6 +208,12 @@ func (r *mutationResolver) RequestForgotPassword(ctx context.Context, email stri
 	}
 
 	accessToken, _ := utils.GenerateOTP()
+	user.VerifyToken = accessToken
+
+
+	if err := config.DB.Save(&user).Error; err != nil {
+		return nil, errors.New("failed to save user")
+	}
 
 	if err := utils.SendVerificationEmail(user.Email, accessToken); err != nil {
 		return nil, errors.New("failed to send verification email")
