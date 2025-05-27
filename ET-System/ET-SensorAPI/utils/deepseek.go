@@ -41,7 +41,7 @@ func AnalyzeUsageData(input string) (string, error) {
 
 	url := "https://openrouter.ai/api/v1/chat/completions"
 
-	prompt := `Buat laporan penggunaan air dalam 3 kalimat (termasuk: total konsumsi, rata-rata harian, puncak pemakaian, pola/anomali, dan saran efisiensi). Gunakan satuan liter dan bahasa sehari-hari.` + input
+	prompt := `Buat laporan penggunaan air dalam 3 kalimat (termasuk: total konsumsi, rata-rata harian, puncak pemakaian, pola/anomali, dan saran efisiensi). Gunakan satuan liter dan bahasa sehari-hari. Jika tidak ada data yang diambil (tidak ada penggunaan water usage) jangan pernah memberikan contoh data penggunaan.` + input
 
 	requestBody, _ := json.Marshal(OpenRouterRequest{
 		Model: "deepseek/deepseek-chat-v3-0324:free",
