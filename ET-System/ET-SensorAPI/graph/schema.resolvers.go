@@ -1132,13 +1132,13 @@ func (r *queryResolver) Notifications(ctx context.Context, userId int32) ([]*mod
 
 		if percentChange > 0 {
 			message = fmt.Sprintf(
-				"Penggunaan air meningkat sebesar %.2f%% (%.2fL → %.2fL). Coba periksa apakah ada keran yang lupa dimatikan atau penggunaan berlebih yang tidak biasa.",
+				"Penggunaan air meningkat sebesar %.2f%% (%.2fL → %.2fL) 👎. Coba periksa apakah ada keran yang lupa dimatikan atau penggunaan berlebih yang tidak biasa.",
 				percentChange,
 				yesterdayTotal,
 				todayTotal)
 		} else if percentChange < 0 {
 			message = fmt.Sprintf(
-				"Bagus! Penggunaan air menurun sebesar %.2f%% (%.2fL → %.2fL). Terus pertahankan kebiasaan hemat air!",
+				"Bagus! Penggunaan air menurun sebesar %.2f%% (%.2fL → %.2fL) 👍. Terus pertahankan kebiasaan hemat air!",
 				math.Abs(percentChange),
 				yesterdayTotal,
 				todayTotal)
