@@ -264,7 +264,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     required String password,
     required String newEmail,
   }) async {
-    const String apiUrl = 'https://api.interphaselabs.com/graphql/query';
+    const String apiUrl =
+        'http://api-ecotrack.interphaselabs.com/graphql/query';
 
     const String mutation = '''
       mutation ChangeEmail(\$email: String!, \$password: String!, \$newemail: String!) {
@@ -459,7 +460,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   }
 
   Future<void> requestForgotPassword(String email) async {
-    const String apiUrl = 'https://api.interphaselabs.com/graphql/query';
+    const String apiUrl =
+        'http://api-ecotrack.interphaselabs.com/graphql/query';
 
     const String mutation = '''
       mutation RequestForgotPassword(\$email: String!) {
@@ -478,7 +480,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   }
 
   Future<void> forgotPasswordHandler(String email, String newPassword) async {
-    const String apiUrl = 'https://api.interphaselabs.com/graphql/query';
+    const String apiUrl = 'http://api-ecotrack.interphaselabs.com/graphql/query';
 
     const String mutation = '''
       mutation ForgotPasswordHandler(\$email: String!, \$password: String!) {

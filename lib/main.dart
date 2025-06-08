@@ -14,22 +14,46 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   HttpOverrides.global = MyHttpOverrides();
 
-  await Firebase.initializeApp();
-  await UserSession.loadSession();
-
-  // ✅ Minta izin notifikasi (Android 13+)
-  final status = await Permission.notification.request();
-  if (status.isDenied || status.isPermanentlyDenied) {
-    print("❌ Izin notifikasi tidak diberikan");
+  try {
+    // ✅ Inisialisasi Firebase
+    await Firebase.initializeApp();
+    print("✅ Firebase initialized");
+  } catch (e) {
+    print("❌ Firebase init error: $e");
   }
 
-  // ✅ Inisialisasi notifikasi
-  await NotificationService.init(navigatorKey);
+  try {
+    // ✅ Load session user
+    await UserSession.loadSession();
+    print("✅ User session loaded");
+  } catch (e) {
+    print("❌ User session error: $e");
+  }
 
-  // ✅ Jalankan aplikasi dulu
+  try {
+    // ✅ Minta izin notifikasi
+    final status = await Permission.notification.request();
+    if (status.isDenied || status.isPermanentlyDenied) {
+      print("❌ Izin notifikasi tidak diberikan");
+    } else {
+      print("✅ Izin notifikasi diberikan");
+    }
+  } catch (e) {
+    print("❌ Permission error: $e");
+  }
+
+  try {
+    // ✅ Inisialisasi notifikasi lokal
+    await NotificationService.init(navigatorKey);
+    print("✅ Notifikasi diinisialisasi");
+  } catch (e) {
+    print("❌ Inisialisasi notifikasi gagal: $e");
+  }
+
+  // ✅ Jalankan aplikasi
   runApp(const MyApp());
 
-  // ✅ Setelah UI tampil, buka pengaturan exact alarm (Android 12+)
+  // ✅ Buka pengaturan exact alarm (jika tersedia)
   Future.delayed(const Duration(seconds: 2), () async {
     try {
       await NotificationService.openExactAlarmSettings();
@@ -54,7 +78,9 @@ class MyApp extends StatelessWidget {
           darkTheme: ThemeData.dark(),
           themeMode: mode,
           home: const SplashScreen(),
-          routes: {'/alerts': (_) => const AlertPage()},
+          routes: {
+            '/alerts': (_) => const AlertPage(),
+          },
         );
       },
     );
